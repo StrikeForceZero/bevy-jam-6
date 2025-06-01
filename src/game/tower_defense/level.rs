@@ -53,7 +53,15 @@ pub fn spawn_level(
                         shadows_enabled: true,
                         ..Default::default()
                     },
-                    Transform::from_xyz(0.0, 7.0, 5.0),
+                    Transform::from_xyz(0.0, 3.1, 0.8),
+                    children![(
+                        Mesh3d(meshes.add(Sphere::new(1.0))),
+                        MeshMaterial3d(materials.add(StandardMaterial {
+                            emissive: Color::WHITE.to_linear(),
+                            unlit: true,
+                            ..Default::default()
+                        })),
+                    )],
                 )],
             )
         ],
