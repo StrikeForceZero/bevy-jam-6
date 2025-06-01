@@ -20,6 +20,9 @@ target/
 # Rust Internal Compilation Error (ICE)
 rustc-ice-*.txt
 
+### Blender
+*.blend[1-9]
+
 ### VisualStudioCode template
 .vscode/*
 !.vscode/settings.json
