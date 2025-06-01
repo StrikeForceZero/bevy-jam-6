@@ -5,7 +5,7 @@ use bevy_auto_plugin::auto_plugin::*;
 use crate::game::rng::{Prng, Seed};
 use bevy_prng::WyRand;
 use bevy_rand::prelude::{GlobalEntropy, GlobalRngEntity, RngSeed};
-use rand_core::SeedableRng;
+use rand::SeedableRng;
 
 #[derive(SystemParam)]
 pub struct GlobalRng<'w, 's> {
@@ -41,7 +41,7 @@ mod tests {
     use super::*;
     use crate::game::rng::{RngPlugin, SEED_LEN, ZERO_SEED};
     use bevy::ecs::system::RunSystemOnce;
-    use rand_core::RngCore;
+    use rand::RngCore;
 
     fn test_app() -> App {
         let mut app = App::new();

@@ -13,7 +13,7 @@ bevy_auto_plugin = { version = "0.2.1", features = ["nightly_pre_2025_04_16"] }
 bevy_frame_count_log_prefix = { git = "https://github.com/StrikeForceZero/bevy_frame_count_log_prefix", branch = "main", features = ["fixed_update"], optional = true }
 bevy_rand = { version = "0.11", features = ["bevy_reflect", "serialize", "wyrand"] }
 bevy_prng = { version = "0.11", features = ["bevy_reflect", "serialize", "wyrand"] }
-rand_core = { version = "0.9", features = ["serde"] }
+rand = { version = "0.9", features = ["serde"] }
 bevy_egui = { version = "0.34", features = ["serde"] }
 bevy_panorbit_camera = { version = "0.26", features = ["bevy_egui"] }
 # bevy_hanabi hasn't published 1.16 yet (https://discord.com/channels/691052431525675048/1036006050526142514/1370844642647478373)
