@@ -24,7 +24,7 @@ pub struct LightningBall;
 #[derive(Component, Debug, SmartDefault, Clone, Reflect)]
 #[reflect(Component)]
 pub struct LightningBallConfig {
-    #[default(DEFAULT_LIGHTNING_BALL_RADIUS..=DEFAULT_LIGHTNING_BALL_SPARK_OFFSET)]
+    #[default(DEFAULT_LIGHTNING_BALL_SPARK_RADIUS_MIN..=DEFAULT_LIGHTNING_BALL_SPARK_RADIUS_MAX)]
     pub spark_radius_range: RangeInclusive<f32>,
     #[default(DEFAULT_LIGHTNING_BALL_SPARK_COUNT)]
     pub spark_count: usize,
@@ -36,8 +36,9 @@ pub struct LightningBallConfig {
     pub spark_segment_max_angle_deg: f32,
 }
 
-pub const DEFAULT_LIGHTNING_BALL_RADIUS: f32 = 0.05;
-pub const DEFAULT_LIGHTNING_BALL_SPARK_OFFSET: f32 = 0.12;
+pub const DEFAULT_LIGHTNING_BALL_RADIUS: f32 = 0.5;
+pub const DEFAULT_LIGHTNING_BALL_SPARK_RADIUS_MIN: f32 = 1.0;
+pub const DEFAULT_LIGHTNING_BALL_SPARK_RADIUS_MAX: f32 = 1.1;
 pub const DEFAULT_LIGHTNING_BALL_SPARK_COUNT: usize = 10;
 pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_COUNT: usize = 3;
 pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_LEN_PERC: f32 = 0.25;
