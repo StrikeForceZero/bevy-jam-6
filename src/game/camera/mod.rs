@@ -31,6 +31,7 @@ pub(crate) fn plugin(app: &mut App) {
 
 fn spawn_camera(mut commands: Commands) {
     commands.spawn((
+        Camera2d,
         MainCamera,
         PanOrbitCamera {
             radius: Some(400.0),
