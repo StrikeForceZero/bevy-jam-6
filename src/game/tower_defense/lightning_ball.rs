@@ -7,6 +7,7 @@ use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 use itertools::Itertools;
 use rand::Rng;
+use smart_default::SmartDefault;
 use std::f32::consts::PI;
 
 #[auto_register_type]
@@ -15,13 +16,42 @@ use std::f32::consts::PI;
 #[reflect(Component)]
 #[require(PointLight)]
 #[require(Transform)]
+#[require(LightningBallRadius)]
+#[require(LightningBallSparkCount)]
+#[require(LightningBallSparkSegmentCount)]
+#[require(LightningBallSparkSegmentLen)]
 pub struct LightningBall;
 
-pub const LIGHTNING_BALL_RADIUS: f32 = 10.0;
-pub const LIGHTNING_BALL_SPARK_COUNT: usize = 10;
-pub const LIGHTNING_BALL_SPARK_SEGMENT_COUNT: usize = 3;
-pub const LIGHTNING_BALL_SPARK_SEGMENT_LEN: f32 =
-    2.0 * PI * LIGHTNING_BALL_RADIUS / 4.0 / LIGHTNING_BALL_SPARK_SEGMENT_COUNT as f32;
+#[auto_register_type]
+#[derive(Component, Debug, SmartDefault, Copy, Clone, Reflect)]
+#[reflect(Component)]
+pub struct LightningBallRadius(#[default(DEFAULT_LIGHTNING_BALL_RADIUS)] pub f32);
+
+#[auto_register_type]
+#[derive(Component, Debug, SmartDefault, Copy, Clone, Reflect)]
+#[reflect(Component)]
+pub struct LightningBallSparkCount(#[default(DEFAULT_LIGHTNING_BALL_SPARK_COUNT)] pub usize);
+
+#[auto_register_type]
+#[derive(Component, Debug, SmartDefault, Copy, Clone, Reflect)]
+#[reflect(Component)]
+pub struct LightningBallSparkSegmentCount(
+    #[default(DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_COUNT)] pub usize,
+);
+
+#[auto_register_type]
+#[derive(Component, Debug, SmartDefault, Copy, Clone, Reflect)]
+#[reflect(Component)]
+pub struct LightningBallSparkSegmentLen(
+    #[default(DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_LEN)] pub f32,
+);
+
+pub const DEFAULT_LIGHTNING_BALL_RADIUS: f32 = 1.0;
+pub const DEFAULT_LIGHTNING_BALL_SPARK_COUNT: usize = 10;
+pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_COUNT: usize = 3;
+pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_LEN: f32 = 2.0 * PI * DEFAULT_LIGHTNING_BALL_RADIUS
+    / 4.0
+    / DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_COUNT as f32;
 
 #[auto_register_type]
 #[auto_init_resource]
@@ -32,7 +62,7 @@ pub struct LightningBallMeshCache(Handle<Mesh>);
 impl FromWorld for LightningBallMeshCache {
     fn from_world(world: &mut World) -> Self {
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
-        Self(meshes.add(Sphere::new(LIGHTNING_BALL_RADIUS)))
+        Self(meshes.add(Sphere::new(DEFAULT_LIGHTNING_BALL_RADIUS)))
     }
 }
 
@@ -70,7 +100,7 @@ fn on_lightning_ball_added(
             ..Default::default()
         },
         RigidBody::Kinematic,
-        Collider::sphere(LIGHTNING_BALL_RADIUS),
+        Collider::sphere(DEFAULT_LIGHTNING_BALL_RADIUS),
     ));
 }
 
@@ -82,10 +112,11 @@ pub struct LightningBallQueryData {
     pub transform: Mut<'static, Transform>,
     pub global_transform: Ref<'static, GlobalTransform>,
     pub point_light: Mut<'static, PointLight>,
+    pub lightning_ball_radius: Mut<'static, LightningBallRadius>,
+    pub lightning_ball_spark_count: Mut<'static, LightningBallSparkCount>,
+    pub lightning_ball_spark_segment_count: Mut<'static, LightningBallSparkSegmentCount>,
+    pub lightning_ball_spark_segment_len: Mut<'static, LightningBallSparkSegmentLen>,
 }
-
-const SPARK_OFFSET: f32 = LIGHTNING_BALL_RADIUS * 1.1 - LIGHTNING_BALL_RADIUS;
-const SPARK_RADIUS: f32 = LIGHTNING_BALL_RADIUS + SPARK_OFFSET;
 
 fn animate(
     mut gizmos: Gizmos,
@@ -93,18 +124,21 @@ fn animate(
     lightning_balls_q: Query<LightningBallQueryData, With<LightningBall>>,
 ) {
     for lb in lightning_balls_q.iter() {
+        let spark_offset = lb.lightning_ball_radius.0 * 1.1 - lb.lightning_ball_radius.0;
+        let spark_radius = lb.lightning_ball_radius.0 + spark_offset;
         // Center of this lightning ball
         let center = lb.global_transform.translation();
 
-        for _ in 0..LIGHTNING_BALL_SPARK_COUNT {
+        for _ in 0..lb.lightning_ball_spark_count.0 {
             // Pick a random starting point exactly on the sphere of radius SPARK_RADIUS:
-            let transform_point = (*rng.rng()).random_sphere_point(SPARK_RADIUS);
+            let transform_point = (*rng.rng()).random_sphere_point(spark_radius);
 
             // Build the spark‐segment polyline, but each time project back onto the sphere:
-            let mut points: Vec<Vec3> = Vec::with_capacity(LIGHTNING_BALL_SPARK_SEGMENT_COUNT + 1);
+            let mut points: Vec<Vec3> =
+                Vec::with_capacity(lb.lightning_ball_spark_segment_count.0 + 1);
             points.push(transform_point);
 
-            for _ in 0..LIGHTNING_BALL_SPARK_SEGMENT_COUNT {
+            for _ in 0..lb.lightning_ball_spark_segment_count.0 {
                 let Some(last) = points.last() else {
                     unreachable!()
                 };
@@ -116,11 +150,11 @@ fn animate(
 
                 // Move “forward” by rotating the last‐point around Z, then push it outwards:
                 let raw_next =
-                    rot * (last + Vec3::new(1.0, 0.0, 0.0) * LIGHTNING_BALL_SPARK_SEGMENT_LEN);
-                let rand_height = rng.rng().random_range(-SPARK_OFFSET..=SPARK_OFFSET);
+                    rot * (last + Vec3::new(1.0, 0.0, 0.0) * lb.lightning_ball_spark_segment_len.0);
+                let rand_height = rng.rng().random_range(-spark_offset..=spark_offset);
 
                 // Project that “raw_next” back onto the sphere radius SPARK_RADIUS + rand_height
-                let next_on_sphere = raw_next.normalize() * (SPARK_RADIUS + rand_height);
+                let next_on_sphere = raw_next.normalize() * (spark_radius + rand_height);
                 points.push(next_on_sphere);
             }
 
