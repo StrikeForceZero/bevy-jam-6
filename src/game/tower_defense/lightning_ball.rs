@@ -8,7 +8,8 @@ use bevy_auto_plugin::auto_plugin::*;
 use itertools::Itertools;
 use rand::Rng;
 use smart_default::SmartDefault;
-use std::f32::consts::PI;
+use std::f32::consts::{PI, TAU};
+use std::ops::RangeInclusive;
 
 #[auto_register_type]
 #[auto_name]
@@ -20,25 +21,27 @@ use std::f32::consts::PI;
 pub struct LightningBall;
 
 #[auto_register_type]
-#[derive(Component, Debug, SmartDefault, Copy, Clone, Reflect)]
+#[derive(Component, Debug, SmartDefault, Clone, Reflect)]
 #[reflect(Component)]
 pub struct LightningBallConfig {
-    #[default(DEFAULT_LIGHTNING_BALL_RADIUS)]
-    pub radius: f32,
+    #[default(DEFAULT_LIGHTNING_BALL_RADIUS..=DEFAULT_LIGHTNING_BALL_SPARK_OFFSET)]
+    pub spark_radius_range: RangeInclusive<f32>,
     #[default(DEFAULT_LIGHTNING_BALL_SPARK_COUNT)]
     pub spark_count: usize,
     #[default(DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_COUNT)]
     pub spark_segment_count: usize,
-    #[default(DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_LEN)]
-    pub spark_segment_len: f32,
+    #[default(DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_LEN_PERC)]
+    pub spark_segment_len_perc: f32,
+    #[default(DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_MAX_ANGLE_DEG)]
+    pub spark_segment_max_angle_deg: f32,
 }
 
-pub const DEFAULT_LIGHTNING_BALL_RADIUS: f32 = 1.0;
+pub const DEFAULT_LIGHTNING_BALL_RADIUS: f32 = 0.05;
+pub const DEFAULT_LIGHTNING_BALL_SPARK_OFFSET: f32 = 0.12;
 pub const DEFAULT_LIGHTNING_BALL_SPARK_COUNT: usize = 10;
 pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_COUNT: usize = 3;
-pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_LEN: f32 = 2.0 * PI * DEFAULT_LIGHTNING_BALL_RADIUS
-    / 4.0
-    / DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_COUNT as f32;
+pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_LEN_PERC: f32 = 0.25;
+pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_MAX_ANGLE_DEG: f32 = 45.0;
 
 #[auto_register_type]
 #[auto_init_resource]
@@ -108,40 +111,75 @@ fn animate(
     lightning_balls_q: Query<LightningBallQueryData, With<LightningBall>>,
 ) {
     for lb in lightning_balls_q.iter() {
-        let spark_offset = lb.lightning_ball_config.radius * 1.1 - lb.lightning_ball_config.radius;
-        let spark_radius = lb.lightning_ball_config.radius + spark_offset;
-        // Center of this lightning ball
+        // Prevent crash during inspector editing and resulting in empty range
+        if lb.lightning_ball_config.spark_radius_range.is_empty() {
+            continue;
+        }
+        let scale = lb.transform.scale.length();
+        let scaled_radius_min = lb.lightning_ball_config.spark_radius_range.start() * scale;
+        let scaled_radius_max = lb.lightning_ball_config.spark_radius_range.end() * scale;
+        let scaled_target_radius = (scaled_radius_min + scaled_radius_max) / 2.0;
+        let total_spark_segment_length =
+            TAU * lb.lightning_ball_config.spark_segment_len_perc * scale;
+        let spark_segment_length =
+            total_spark_segment_length / lb.lightning_ball_config.spark_segment_count as f32;
         let center = lb.global_transform.translation();
 
         for _ in 0..lb.lightning_ball_config.spark_count {
-            // Pick a random starting point exactly on the sphere of radius SPARK_RADIUS:
-            let transform_point = (*rng.rng()).random_sphere_point(spark_radius);
+            // Pick a random starting point on the sphere:
+            let transform_point = (*rng.rng()).random_sphere_point(scaled_target_radius);
 
-            // Build the spark‐segment polyline, but each time project back onto the sphere:
+            // Build a tangent‐space basis at transform_point:
+            let normal = transform_point.normalize();
+            // Pick any vector not parallel to `normal`:
+            let helper = if normal.x.abs() < 0.9 {
+                Vec3::X
+            } else {
+                Vec3::Y
+            };
+            // Gram–Schmidt to get a unit tangent:
+            let tangent = (helper - normal * normal.dot(helper)).normalize();
+            let bitangent = normal.cross(tangent);
+
+            // Choose a truly random initial direction in that tangent plane:
+            let phi = rng.rng().random_range(0.0f32..TAU);
+            let mut direction = tangent * phi.cos() + bitangent * phi.sin();
+            // Note: `direction` is a unit‐length vector, tangent to the sphere at transform_point.
+
+            // Build the list of points (in *local* sphere coordinates):
             let mut points: Vec<Vec3> =
                 Vec::with_capacity(lb.lightning_ball_config.spark_segment_count + 1);
             points.push(transform_point);
+            let mut last = transform_point;
+
+            let max_angle = lb
+                .lightning_ball_config
+                .spark_segment_max_angle_deg
+                .to_radians();
 
             for _ in 0..lb.lightning_ball_config.spark_segment_count {
-                let last = points.last().expect("impossible");
+                // Rotate `direction` by a small random angle *around* the local normal:
+                // (This “wiggles” the direction within the tangent plane.)
+                let theta = rng.rng().random_range(-max_angle..=max_angle);
+                let rot = Quat::from_axis_angle(normal, theta);
+                direction = (rot * direction).normalize();
 
-                // Compute some “raw” offset in 3D. For example, take a random small angular step
-                //  around the Z‐axis, and a tiny wiggle in the Y‐direction:
-                let angle_deg: f32 = rng.rng().random_range(-45.0..=45.0);
-                let rot = Quat::from_rotation_z(angle_deg.to_degrees());
+                // Take a small step “forward” along that tangent:
+                let raw_offset = direction * spark_segment_length;
+                let raw_next = last + raw_offset;
 
-                // Move “forward” by rotating the last‐point around Z, then push it outwards:
-                let raw_next = rot
-                    * (last
-                        + Vec3::new(1.0, 0.0, 0.0) * lb.lightning_ball_config.spark_segment_len);
-                let rand_height = rng.rng().random_range(-spark_offset..=spark_offset);
+                // Pick a random radius in [min..max] for this new point:
+                let rand_radius = rng
+                    .rng()
+                    .random_range(scaled_radius_min..=scaled_radius_max);
 
-                // Project that “raw_next” back onto the sphere radius SPARK_RADIUS + rand_height
-                let next_on_sphere = raw_next.normalize() * (spark_radius + rand_height);
+                // Project raw_next onto the sphere of that random radius:
+                let next_on_sphere = raw_next.normalize() * rand_radius;
                 points.push(next_on_sphere);
+                last = next_on_sphere;
             }
 
-            // Translate every point by the ball’s center and rotate it to the random point vector
+            // Translate each point into world space and draw the polyline:
             let world_pts: Vec<Vec3> = points
                 .into_iter()
                 .map(|p| Transform::from_translation(center).transform_point(p))
