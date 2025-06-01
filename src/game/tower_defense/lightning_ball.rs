@@ -123,9 +123,7 @@ fn animate(
             points.push(transform_point);
 
             for _ in 0..lb.lightning_ball_config.spark_segment_count {
-                let Some(last) = points.last() else {
-                    unreachable!()
-                };
+                let last = points.last().expect("impossible");
 
                 // Compute some “raw” offset in 3D. For example, take a random small angular step
                 //  around the Z‐axis, and a tiny wiggle in the Y‐direction:
