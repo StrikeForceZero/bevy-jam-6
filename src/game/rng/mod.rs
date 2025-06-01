@@ -1,4 +1,5 @@
 pub mod global;
+pub mod sphere;
 
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
