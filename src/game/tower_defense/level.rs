@@ -44,11 +44,11 @@ pub fn spawn_level(
             ),
             (
                 Wizard,
-                CameraTarget,
                 Transform::from_xyz(0.0, 100.0, 0.0).with_scale(Vec3::splat(10.0)),
             ),
             (
                 LightningBall,
+                CameraTarget,
                 Transform::from_xyz(0.0, 3.1 * 10.0 + 100.0, 0.8 * 10.0),
             )
         ],
