@@ -16,35 +16,22 @@ use std::f32::consts::PI;
 #[reflect(Component)]
 #[require(PointLight)]
 #[require(Transform)]
-#[require(LightningBallRadius)]
-#[require(LightningBallSparkCount)]
-#[require(LightningBallSparkSegmentCount)]
-#[require(LightningBallSparkSegmentLen)]
+#[require(LightningBallConfig)]
 pub struct LightningBall;
 
 #[auto_register_type]
 #[derive(Component, Debug, SmartDefault, Copy, Clone, Reflect)]
 #[reflect(Component)]
-pub struct LightningBallRadius(#[default(DEFAULT_LIGHTNING_BALL_RADIUS)] pub f32);
-
-#[auto_register_type]
-#[derive(Component, Debug, SmartDefault, Copy, Clone, Reflect)]
-#[reflect(Component)]
-pub struct LightningBallSparkCount(#[default(DEFAULT_LIGHTNING_BALL_SPARK_COUNT)] pub usize);
-
-#[auto_register_type]
-#[derive(Component, Debug, SmartDefault, Copy, Clone, Reflect)]
-#[reflect(Component)]
-pub struct LightningBallSparkSegmentCount(
-    #[default(DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_COUNT)] pub usize,
-);
-
-#[auto_register_type]
-#[derive(Component, Debug, SmartDefault, Copy, Clone, Reflect)]
-#[reflect(Component)]
-pub struct LightningBallSparkSegmentLen(
-    #[default(DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_LEN)] pub f32,
-);
+pub struct LightningBallConfig {
+    #[default(DEFAULT_LIGHTNING_BALL_RADIUS)]
+    pub radius: f32,
+    #[default(DEFAULT_LIGHTNING_BALL_SPARK_COUNT)]
+    pub spark_count: usize,
+    #[default(DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_COUNT)]
+    pub spark_segment_count: usize,
+    #[default(DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_LEN)]
+    pub spark_segment_len: f32,
+}
 
 pub const DEFAULT_LIGHTNING_BALL_RADIUS: f32 = 1.0;
 pub const DEFAULT_LIGHTNING_BALL_SPARK_COUNT: usize = 10;
@@ -112,10 +99,7 @@ pub struct LightningBallQueryData {
     pub transform: Mut<'static, Transform>,
     pub global_transform: Ref<'static, GlobalTransform>,
     pub point_light: Mut<'static, PointLight>,
-    pub lightning_ball_radius: Mut<'static, LightningBallRadius>,
-    pub lightning_ball_spark_count: Mut<'static, LightningBallSparkCount>,
-    pub lightning_ball_spark_segment_count: Mut<'static, LightningBallSparkSegmentCount>,
-    pub lightning_ball_spark_segment_len: Mut<'static, LightningBallSparkSegmentLen>,
+    pub lightning_ball_config: Mut<'static, LightningBallConfig>,
 }
 
 fn animate(
@@ -124,21 +108,21 @@ fn animate(
     lightning_balls_q: Query<LightningBallQueryData, With<LightningBall>>,
 ) {
     for lb in lightning_balls_q.iter() {
-        let spark_offset = lb.lightning_ball_radius.0 * 1.1 - lb.lightning_ball_radius.0;
-        let spark_radius = lb.lightning_ball_radius.0 + spark_offset;
+        let spark_offset = lb.lightning_ball_config.radius * 1.1 - lb.lightning_ball_config.radius;
+        let spark_radius = lb.lightning_ball_config.radius + spark_offset;
         // Center of this lightning ball
         let center = lb.global_transform.translation();
 
-        for _ in 0..lb.lightning_ball_spark_count.0 {
+        for _ in 0..lb.lightning_ball_config.spark_count {
             // Pick a random starting point exactly on the sphere of radius SPARK_RADIUS:
             let transform_point = (*rng.rng()).random_sphere_point(spark_radius);
 
             // Build the spark‐segment polyline, but each time project back onto the sphere:
             let mut points: Vec<Vec3> =
-                Vec::with_capacity(lb.lightning_ball_spark_segment_count.0 + 1);
+                Vec::with_capacity(lb.lightning_ball_config.spark_segment_count + 1);
             points.push(transform_point);
 
-            for _ in 0..lb.lightning_ball_spark_segment_count.0 {
+            for _ in 0..lb.lightning_ball_config.spark_segment_count {
                 let Some(last) = points.last() else {
                     unreachable!()
                 };
@@ -149,8 +133,9 @@ fn animate(
                 let rot = Quat::from_rotation_z(angle_deg.to_degrees());
 
                 // Move “forward” by rotating the last‐point around Z, then push it outwards:
-                let raw_next =
-                    rot * (last + Vec3::new(1.0, 0.0, 0.0) * lb.lightning_ball_spark_segment_len.0);
+                let raw_next = rot
+                    * (last
+                        + Vec3::new(1.0, 0.0, 0.0) * lb.lightning_ball_config.spark_segment_len);
                 let rand_height = rng.rng().random_range(-spark_offset..=spark_offset);
 
                 // Project that “raw_next” back onto the sphere radius SPARK_RADIUS + rand_height
