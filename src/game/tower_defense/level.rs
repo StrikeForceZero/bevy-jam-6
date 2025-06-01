@@ -1,5 +1,6 @@
 use crate::game::camera::CameraTarget;
 use crate::game::screens::Screen;
+use crate::game::tower_defense::lightning_ball::LightningBall;
 use crate::game::tower_defense::tower::Tower;
 use crate::game::tower_defense::wizard::Wizard;
 use bevy::color::palettes::css::GREEN;
@@ -45,24 +46,10 @@ pub fn spawn_level(
                 Wizard,
                 CameraTarget,
                 Transform::from_xyz(0.0, 100.0, 0.0).with_scale(Vec3::splat(10.0)),
-                children![(
-                    PointLight {
-                        intensity: 99999999.0,
-                        range: 1000.0,
-                        radius: 999.0,
-                        shadows_enabled: true,
-                        ..Default::default()
-                    },
-                    Transform::from_xyz(0.0, 3.1, 0.8),
-                    children![(
-                        Mesh3d(meshes.add(Sphere::new(1.0))),
-                        MeshMaterial3d(materials.add(StandardMaterial {
-                            emissive: Color::WHITE.to_linear(),
-                            unlit: true,
-                            ..Default::default()
-                        })),
-                    )],
-                )],
+            ),
+            (
+                LightningBall,
+                Transform::from_xyz(0.0, 3.1 * 10.0 + 100.0, 0.8 * 10.0),
             )
         ],
     ));
