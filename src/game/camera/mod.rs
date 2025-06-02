@@ -25,8 +25,8 @@ pub(crate) fn plugin(app: &mut App) {
     app.add_systems(Startup, spawn_camera);
     app.add_systems(Update, update_camera_target);
     app.insert_resource(AmbientLight {
-        color: Color::srgba(0.816, 0.814, 0.221, 1.000),
-        brightness: 50.0,
+        color: Color::WHITE,
+        brightness: 2000.0,
         ..Default::default()
     });
 }

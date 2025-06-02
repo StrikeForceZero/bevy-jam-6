@@ -27,17 +27,6 @@ pub fn spawn_level(
             Visibility::default(),
             children![
                 (
-                    PointLight {
-                        color: Color::srgba(0.933, 0.966, 0.806, 1.000),
-                        intensity: 9999999999.0,
-                        range: 100000.0,
-                        radius: 999.0,
-                        shadows_enabled: true,
-                        ..Default::default()
-                    },
-                    Transform::from_xyz(30.0, 300.0, 80.0),
-                ),
-                (
                     Name::new("Grass"),
                     Mesh3d(meshes.add(Cuboid::new(1000.0, 10.0, 1000.0))),
                     MeshMaterial3d(materials.add(StandardMaterial {
