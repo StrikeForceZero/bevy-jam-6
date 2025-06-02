@@ -1,10 +1,8 @@
 use crate::game::rng::global::GlobalRng;
 use crate::game::rng::sphere::RandomSpherePoint;
 use avian3d::prelude::{
-    Collider, CollidingEntities, CollisionEventsEnabled, Collisions, Position, RigidBody, Rotation,
-    Sensor,
+    Collider, CollidingEntities, Collisions, Position, RigidBody, Rotation, Sensor,
 };
-use bevy::color::palettes::basic::RED;
 use bevy::color::palettes::css::SKY_BLUE;
 use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
