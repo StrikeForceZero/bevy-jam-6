@@ -2,7 +2,7 @@ use crate::game::asset_tracking::LoadResource;
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 
-use super::behaviors::MovementSpeed;
+use crate::game::behaviors::MovementSpeed;
 
 #[auto_register_type]
 #[derive(Resource, Asset, Debug, Clone, Reflect)]

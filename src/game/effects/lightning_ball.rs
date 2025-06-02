@@ -1,3 +1,5 @@
+// TODO: split bolt into component marker with behavior and effects
+
 use crate::game::rng::global::GlobalRng;
 use crate::game::rng::sphere::RandomSpherePoint;
 use avian3d::prelude::{

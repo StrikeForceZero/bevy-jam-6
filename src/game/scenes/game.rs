@@ -1,18 +1,17 @@
+use crate::game::behaviors::target_ent::TargetEnt;
 use crate::game::camera::CameraTarget;
+use crate::game::effects::lightning_ball::{LightningBall, LightningBallConduit};
+use crate::game::prefabs::enemy::Enemy;
+use crate::game::prefabs::tower::Tower;
+use crate::game::prefabs::wizard::Wizard;
 use crate::game::screens::Screen;
-use crate::game::tower_defense::lightning_ball::{LightningBall, LightningBallConduit};
-use crate::game::tower_defense::tower::Tower;
-use crate::game::tower_defense::wizard::Wizard;
 use avian3d::prelude::Collider;
 use bevy::color::palettes::css::GREEN;
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 
-use super::behaviors::target_ent::TargetEnt;
-use super::enemy::Enemy;
-
 #[auto_plugin(app=_app)]
-pub(crate) fn plugin(_app: &mut App) {}
+pub fn plugin(_app: &mut App) {}
 
 pub fn spawn_level(
     mut commands: Commands,
