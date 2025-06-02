@@ -1,6 +1,9 @@
 use crate::game::rng::global::GlobalRng;
 use crate::game::rng::sphere::RandomSpherePoint;
-use avian3d::prelude::{Collider, CollidingEntities, CollisionEventsEnabled, RigidBody, Sensor};
+use avian3d::prelude::{
+    Collider, CollidingEntities, CollisionEventsEnabled, Collisions, Position, RigidBody, Rotation,
+    Sensor,
+};
 use bevy::color::palettes::basic::RED;
 use bevy::color::palettes::css::SKY_BLUE;
 use bevy::ecs::query::QueryData;
@@ -239,7 +242,8 @@ fn animate_in_range(
         LightningBallSourceQueryData,
         (With<LightningBallSource>, Without<LightningBall>),
     >,
-    colliding_q: Query<Ref<GlobalTransform>>,
+    colliding_q: Query<(&Position, &Rotation)>,
+    collisions: Collisions,
 ) {
     for lb in lightning_balls_q.iter() {
         // Prevent crash during inspector editing and resulting in empty range
@@ -255,12 +259,26 @@ fn animate_in_range(
                 continue;
             };
             for _ in 0..lb.lightning_ball_config.spark_count {
-                for colliding_entity in lb_source.colliding_entities.iter() {
-                    // Collider’s world‐position (endpoint):
-                    let Ok(target_xform) = colliding_q.get(*colliding_entity) else {
+                for &colliding_entity in lb_source.colliding_entities.iter() {
+                    let Ok((position, rotation)) = colliding_q.get(colliding_entity) else {
                         continue;
                     };
-                    let target_world_pos: Vec3 = target_xform.translation();
+
+                    let Some(cp) = collisions.get(lb_source.entity, colliding_entity) else {
+                        continue;
+                    };
+
+                    let Some(contact) = cp.find_deepest_contact() else {
+                        continue;
+                    };
+
+                    let target_world_pos = if cp.collider1 == colliding_entity {
+                        contact.global_point1(position, rotation)
+                    } else if cp.collider2 == colliding_entity {
+                        contact.global_point2(position, rotation)
+                    } else {
+                        unreachable!("bad collision");
+                    };
 
                     // Direction + distance from ball center → target
                     let to_target = target_world_pos - center;
