@@ -246,12 +246,15 @@ pub fn add_highlight_observers(
 
 fn on_mouse_event_update_material<E, M>(
     material_handle: Handle<M>,
-) -> impl FnMut(Trigger<E>, Commands, Query<Option<&DebugSelected>>)
+) -> impl FnMut(Trigger<E>, Commands, Query<Option<&DebugSelected>>, Res<DebugSelectionEffectsEnabled>)
 where
     E: Event + Debug,
     M: Material,
 {
-    move |trigger, mut commands, debug_selected| {
+    move |trigger, mut commands, debug_selected, debug_selection_enabled| {
+        if !debug_selection_enabled.material_highlights {
+            return;
+        }
         if let Ok(debug_selected_opt) = debug_selected.get(trigger.target()) {
             if debug_selected_opt.is_some() {
                 return;
@@ -324,6 +327,15 @@ fn outlines(
     }
 }
 
+#[auto_register_type]
+#[auto_init_resource]
+#[derive(Resource, Debug, Default, Copy, Clone, Reflect)]
+#[reflect(Resource)]
+struct DebugSelectionEffectsEnabled {
+    material_highlights: bool,
+    outlines: bool,
+}
+
 #[auto_plugin(app=app)]
 pub(super) fn plugin(app: &mut App) {
     app.init_gizmo_group::<SelectedOutlineGizmos>();
@@ -339,5 +351,8 @@ pub(super) fn plugin(app: &mut App) {
     );
     app.add_systems(PostStartup, add_highlight_observers);
     app.add_systems(Update, add_highlight_observers);
-    app.add_systems(Update, outlines);
+    app.add_systems(
+        Update,
+        outlines.run_if(|res: Res<DebugSelectionEffectsEnabled>| res.outlines),
+    );
 }
