@@ -5,7 +5,6 @@ mod asset_tracking;
 mod audio;
 mod camera;
 mod constants;
-mod demo;
 mod despawn;
 #[cfg(feature = "dev")]
 mod dev;
@@ -59,7 +58,6 @@ impl Plugin for GamePlugin {
         app.add_plugins(asset_tracking::plugin);
         app.add_plugins(pause_controller::plugin);
         app.add_plugins(physics::plugin);
-        app.add_plugins(demo::plugin);
         app.add_plugins(tower_defense::plugin);
         app.add_plugins(audio::plugin);
         app.add_plugins(theme::plugin);

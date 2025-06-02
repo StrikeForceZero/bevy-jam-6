@@ -78,8 +78,8 @@ fn enter_title_screen(mut next_screen: ResMut<NextState<Screen>>) {
 }
 
 const SPLASH_BACKGROUND_COLOR: Color = Color::srgb(0.157, 0.157, 0.157);
-const SPLASH_DURATION_SECS: f32 = 1.8;
-const SPLASH_FADE_DURATION_SECS: f32 = 0.6;
+const SPLASH_DURATION_SECS: f32 = 0.2;
+const SPLASH_FADE_DURATION_SECS: f32 = 0.2;
 
 fn spawn_splash_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((

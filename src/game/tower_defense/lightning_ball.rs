@@ -8,7 +8,7 @@ use bevy_auto_plugin::auto_plugin::*;
 use itertools::Itertools;
 use rand::Rng;
 use smart_default::SmartDefault;
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::TAU;
 use std::ops::RangeInclusive;
 
 #[auto_register_type]
