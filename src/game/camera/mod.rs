@@ -25,6 +25,7 @@ pub(crate) fn plugin(app: &mut App) {
     app.add_systems(Startup, spawn_camera);
     app.add_systems(Update, update_camera_target);
     app.insert_resource(AmbientLight {
+        color: Color::srgba(0.816, 0.814, 0.221, 1.000),
         brightness: 50.0,
         ..Default::default()
     });
@@ -43,7 +44,7 @@ fn spawn_camera(mut commands: Commands) {
             focus: Vec3::ZERO,
             ..Default::default()
         },
-        Transform::from_translation(Vec3::new(-150.0, 710.0, -270.0)),
+        Transform::from_translation(Vec3::new(0.0, 660.0, -340.0)),
     ));
 }
 

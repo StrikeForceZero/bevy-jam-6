@@ -27,7 +27,8 @@ pub fn spawn_level(
             children![
                 (
                     PointLight {
-                        intensity: 19999999999.0,
+                        color: Color::srgba(0.933, 0.966, 0.806, 1.000),
+                        intensity: 9999999999.0,
                         range: 100000.0,
                         radius: 999.0,
                         shadows_enabled: true,
