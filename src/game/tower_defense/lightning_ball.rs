@@ -65,6 +65,13 @@ struct LightningBallSources(Vec<Entity>);
 struct LightningBallSource(Entity);
 
 #[auto_register_type]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Transform)]
+#[require(Collider)]
+pub struct LightningBallConduit;
+
+#[auto_register_type]
 #[auto_init_resource]
 #[derive(Resource, Debug, Clone, Reflect)]
 #[reflect(Resource)]
@@ -242,7 +249,7 @@ fn animate_in_range(
         LightningBallSourceQueryData,
         (With<LightningBallSource>, Without<LightningBall>),
     >,
-    colliding_q: Query<(&Position, &Rotation)>,
+    colliding_q: Query<(&Position, &Rotation), With<LightningBallConduit>>,
     collisions: Collisions,
 ) {
     for lb in lightning_balls_q.iter() {
