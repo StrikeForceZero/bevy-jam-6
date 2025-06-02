@@ -1,7 +1,7 @@
+use super::MovementSpeed;
+use crate::game::pause_controller::PausableSystems;
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
-
-use super::MovementSpeed;
 
 #[auto_register_type]
 #[derive(Component, Debug, Copy, Clone, Reflect)]
@@ -48,5 +48,5 @@ fn target_ent_sys(
 
 #[auto_plugin(app=app)]
 pub(crate) fn plugin(app: &mut App) {
-    app.add_systems(Update, target_ent_sys);
+    app.add_systems(Update, target_ent_sys.in_set(PausableSystems));
 }
