@@ -1,4 +1,8 @@
-use crate::game::asset_tracking::LoadResource;
+use crate::game::{
+    asset_tracking::LoadResource,
+    health::{Health, MaxHealth},
+    spark::SparkTarget,
+};
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 
@@ -20,19 +24,41 @@ impl FromWorld for EnemyAssets {
     }
 }
 
+impl EnemyAssets {
+    pub fn get_by_enemy(&self, enemy: &Enemy) -> Handle<Gltf> {
+        match enemy {
+            Enemy::BaseSkele => self.base_skele.clone(),
+        }
+    }
+}
+
 #[auto_register_type]
 #[auto_name]
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
-#[require(Transform)]
+#[require(Transform, SparkTarget)]
 pub enum Enemy {
     BaseSkele,
 }
 
+pub struct EnemyMeta {
+    pub max_health: f32,
+    pub move_speed: f32,
+}
+
+impl EnemyMeta {
+    fn new(max_health: f32, move_speed: f32) -> Self {
+        Self {
+            max_health,
+            move_speed,
+        }
+    }
+}
+
 impl Enemy {
-    pub fn default_move_speed(&self) -> f32 {
+    pub fn meta(&self) -> EnemyMeta {
         match self {
-            Self::BaseSkele => 8.0,
+            Self::BaseSkele => EnemyMeta::new(100.0, 8.0),
         }
     }
 }
@@ -40,33 +66,30 @@ impl Enemy {
 #[auto_plugin(app=app)]
 pub(crate) fn plugin(app: &mut App) {
     app.load_resource::<EnemyAssets>();
-    app.add_observer(on_enemy_added);
+    app.add_observer(Enemy::handle_on_add);
 }
 
-fn on_enemy_added(
-    trigger: Trigger<OnAdd, Enemy>,
-    query: Query<&Enemy>,
-    enemy_assets: Res<EnemyAssets>,
-    gltfs: Res<Assets<Gltf>>,
-    mut commands: Commands,
-) {
-    let enemy = query
-        .get(trigger.target())
-        .expect("No target entity for trigger");
+impl Enemy {
+    fn handle_on_add(
+        trigger: Trigger<OnAdd, Self>,
+        query: Query<&Self, Added<Self>>,
+        enemy_assets: Res<EnemyAssets>,
+        gltfs: Res<Assets<Gltf>>,
+        mut commands: Commands,
+    ) {
+        let enemy = query.get(trigger.target()).expect("OnAdd broken");
 
-    // Model handle
-    let gltf_h = match *enemy {
-        Enemy::BaseSkele => enemy_assets.base_skele.clone(),
-    };
-    let gltf = gltfs
-        .get(&gltf_h)
-        .unwrap_or_else(|| panic!("Missing gltf asset for {:?}", enemy));
+        let Some(gltf) = gltfs.get(&enemy_assets.get_by_enemy(enemy)) else {
+            panic!("Missing gltf asset for {:?}", enemy)
+        };
 
-    // MovementSpeed
-    let movement_speed = MovementSpeed(enemy.default_move_speed());
+        let enemy_meta = enemy.meta();
 
-    commands
-        .entity(trigger.target())
-        .insert(SceneRoot(gltf.scenes[0].clone()))
-        .insert(movement_speed);
+        commands.entity(trigger.target()).insert((
+            SceneRoot(gltf.scenes[0].clone()),
+            MovementSpeed(enemy_meta.move_speed),
+            Health(enemy_meta.max_health),
+            MaxHealth(enemy_meta.max_health),
+        ));
+    }
 }
