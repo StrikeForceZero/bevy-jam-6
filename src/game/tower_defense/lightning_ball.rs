@@ -1,6 +1,7 @@
 use crate::game::rng::global::GlobalRng;
 use crate::game::rng::sphere::RandomSpherePoint;
-use avian3d::prelude::{Collider, RigidBody};
+use avian3d::prelude::{Collider, CollidingEntities, CollisionEventsEnabled, RigidBody, Sensor};
+use bevy::color::palettes::basic::RED;
 use bevy::color::palettes::css::SKY_BLUE;
 use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
@@ -18,6 +19,7 @@ use std::ops::RangeInclusive;
 #[require(PointLight)]
 #[require(Transform)]
 #[require(LightningBallConfig)]
+#[require(LightningBallSources)]
 pub struct LightningBall;
 
 #[auto_register_type]
@@ -43,6 +45,21 @@ pub const DEFAULT_LIGHTNING_BALL_SPARK_COUNT: usize = 10;
 pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_COUNT: usize = 3;
 pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_LEN_PERC: f32 = 0.25;
 pub const DEFAULT_LIGHTNING_BALL_SPARK_SEGMENT_MAX_ANGLE_DEG: f32 = 45.0;
+
+#[auto_register_type]
+#[derive(Component, Debug, Default, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Transform)]
+#[relationship_target(relationship = LightningBallSource, linked_spawn)]
+struct LightningBallSources(Vec<Entity>);
+
+#[auto_register_type]
+#[auto_name]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Transform)]
+#[relationship(relationship_target = LightningBallSources)]
+struct LightningBallSource(Entity);
 
 #[auto_register_type]
 #[auto_init_resource]
@@ -79,7 +96,8 @@ fn on_lightning_ball_added(
     material_cache: Res<LightningBallMeshMaterialCache>,
     mesh_cache: Res<LightningBallMeshCache>,
 ) {
-    commands.entity(trigger.target()).insert((
+    let entity = trigger.target();
+    commands.entity(entity).insert((
         Mesh3d(mesh_cache.0.clone()),
         MeshMaterial3d(material_cache.0.clone()),
         PointLight {
@@ -92,6 +110,12 @@ fn on_lightning_ball_added(
         },
         RigidBody::Kinematic,
         Collider::sphere(DEFAULT_LIGHTNING_BALL_RADIUS),
+        children![(
+            LightningBallSource(entity),
+            Sensor,
+            Collider::sphere(DEFAULT_LIGHTNING_BALL_RADIUS * 50.0),
+            CollidingEntities::default(),
+        )],
     ));
 }
 
@@ -104,6 +128,17 @@ pub struct LightningBallQueryData {
     pub global_transform: Ref<'static, GlobalTransform>,
     pub point_light: Mut<'static, PointLight>,
     pub lightning_ball_config: Mut<'static, LightningBallConfig>,
+    lighting_ball_sources: Ref<'static, LightningBallSources>,
+}
+
+#[derive(QueryData)]
+#[query_data(mutable, derive(Debug))]
+pub struct LightningBallSourceQueryData {
+    pub entity: Entity,
+    lightning_ball_source: Ref<'static, LightningBallSource>,
+    pub transform: Mut<'static, Transform>,
+    pub global_transform: Ref<'static, GlobalTransform>,
+    pub colliding_entities: Ref<'static, CollidingEntities>,
 }
 
 fn animate(
@@ -193,8 +228,110 @@ fn animate(
     }
 }
 
+fn animate_in_range(
+    mut gizmos: Gizmos,
+    mut rng: GlobalRng,
+    lightning_balls_q: Query<
+        LightningBallQueryData,
+        (With<LightningBall>, Without<LightningBallSource>),
+    >,
+    lightning_balls_source_q: Query<
+        LightningBallSourceQueryData,
+        (With<LightningBallSource>, Without<LightningBall>),
+    >,
+    colliding_q: Query<Ref<GlobalTransform>>,
+) {
+    for lb in lightning_balls_q.iter() {
+        // Prevent crash during inspector editing and resulting in empty range
+        if lb.lightning_ball_config.spark_radius_range.is_empty() {
+            continue;
+        }
+        let scale = lb.transform.scale.length();
+        let scaled_radius_max = lb.lightning_ball_config.spark_radius_range.end() * scale;
+        let center = lb.global_transform.translation();
+
+        for lightning_ball_source_entity in lb.lighting_ball_sources.iter() {
+            let Ok(lb_source) = lightning_balls_source_q.get(lightning_ball_source_entity) else {
+                continue;
+            };
+            for _ in 0..lb.lightning_ball_config.spark_count {
+                for colliding_entity in lb_source.colliding_entities.iter() {
+                    // Collider’s world‐position (endpoint):
+                    let Ok(target_xform) = colliding_q.get(*colliding_entity) else {
+                        continue;
+                    };
+                    let target_world_pos: Vec3 = target_xform.translation();
+
+                    // Direction + distance from ball center → target
+                    let to_target = target_world_pos - center;
+                    if to_target.length_squared() < f32::EPSILON {
+                        continue;
+                    }
+                    let n = to_target.normalize(); // “pole” for our hemisphere
+                    let full_distance = to_target.length();
+
+                    // Sphere’s outer radius (so we launch exactly from the curved face):
+                    let sphere_radius: f32 = scaled_radius_max;
+
+                    // Build an orthonormal basis {perp1, perp2} ⟂ n:
+                    let helper = if n.x.abs() < 0.9 { Vec3::X } else { Vec3::Y };
+                    let perp1 = (helper - n * n.dot(helper)).normalize();
+                    let perp2 = n.cross(perp1);
+
+                    // Sample a random direction on the hemisphere whose “pole” is n:
+                    let phi = rng.rng().random_range(0.0f32..TAU);
+                    let cos_theta = rng.rng().random_range(0.0f32..=1.0f32);
+                    let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
+                    let hemisphere_dir = perp1 * (sin_theta * phi.cos())
+                        + perp2 * (sin_theta * phi.sin())
+                        + n * (cos_theta);
+
+                    // Compute the random start point on that hemisphere of the sphere:
+                    let start_point: Vec3 = center + hemisphere_dir * sphere_radius;
+
+                    // TODO: space out bends to make it more organic
+                    // Build a jagged bolt from start_point → target_world_pos:
+                    //    interpolate from “start_point on the sphere surface” to the exact target,
+                    //    adding a small sideways jitter at each interior segment.
+                    let mut bolt_points: Vec<Vec3> =
+                        Vec::with_capacity(lb.lightning_ball_config.spark_segment_count + 2);
+                    bolt_points.push(start_point);
+
+                    // Precompute straight vs lateral:
+                    let segments = lb.lightning_ball_config.spark_segment_count as f32;
+                    for i in 1..=lb.lightning_ball_config.spark_segment_count {
+                        let t = (i as f32) / (segments + 1.0);
+                        // Interpolate the distance from start_radius → full_distance:
+                        let distance_along_line =
+                            sphere_radius + (full_distance - sphere_radius) * t;
+                        let ideal_point = center + n * distance_along_line;
+
+                        // Sideways jitter: zero at t=0, zero at t=1, peaks at t=0.5
+                        let max_offset = full_distance * 0.05 * (1.0 - (2.0 * (t - 0.5)).abs());
+                        let mag = rng.rng().random_range(-max_offset..=max_offset);
+                        let angle = rng.rng().random_range(0.0f32..TAU);
+                        let sideways_offset =
+                            perp1 * (angle.cos() * mag) + perp2 * (angle.sin() * mag);
+
+                        let next_pt = ideal_point + sideways_offset;
+                        bolt_points.push(next_pt);
+                    }
+
+                    // End at the collider’s transform:
+                    bolt_points.push(target_world_pos);
+
+                    // Draw
+                    for (&a, &b) in bolt_points.iter().tuple_windows() {
+                        gizmos.line_gradient(a, b, Color::WHITE, Color::from(SKY_BLUE));
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[auto_plugin(app=app)]
 pub(crate) fn plugin(app: &mut App) {
     app.add_observer(on_lightning_ball_added);
-    app.add_systems(Update, animate);
+    app.add_systems(Update, (animate, animate_in_range));
 }
