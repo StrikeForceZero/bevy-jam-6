@@ -56,24 +56,21 @@ pub fn spawn_level(
         ))
         .id();
 
-
     let tower_ent = commands
         .entity(level_ent)
         .with_child((
             Tower,
             Transform::from_xyz(0.0, 50.0, 0.0),
-            children![
-                (
-                    Wizard,
-                    Transform::from_xyz(0.0, 80.0, 0.0).with_scale(Vec3::splat(10.0)),
-                    children![(
-                        Name::new("Fake Staff Pos"),
-                        LightningBallConduit,
-                        Transform::from_xyz(-0.81, 1.95, -0.09),
-                        Collider::sphere(0.25)
-                    )],
-                ),
-            ],
+            children![(
+                Wizard,
+                Transform::from_xyz(0.0, 50.0, 0.0).with_scale(Vec3::splat(10.0)),
+                children![(
+                    Name::new("Fake Staff Pos"),
+                    LightningBallConduit,
+                    Transform::from_xyz(-0.81, 1.95, -0.09),
+                    Collider::sphere(0.25)
+                )],
+            ),],
         ))
         .id();
 
