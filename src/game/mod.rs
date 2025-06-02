@@ -14,7 +14,7 @@ mod menus;
 mod pause_controller;
 mod physics;
 mod rng;
-mod screens;
+pub mod screens;
 mod snapshot;
 mod spark;
 mod theme;
