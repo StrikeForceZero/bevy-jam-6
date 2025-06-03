@@ -1,4 +1,4 @@
-use avian3d::prelude::Collider;
+use avian3d::prelude::{Collider, RigidBody};
 use bevy::color::palettes::css::GRAY;
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
@@ -30,5 +30,6 @@ fn on_tower_added(
             ..Default::default()
         })),
         Collider::cylinder(RADIUS, HEIGHT),
+        RigidBody::Static,
     ));
 }

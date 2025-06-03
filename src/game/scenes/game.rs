@@ -8,7 +8,7 @@ use crate::game::prefabs::spawner::Spawner;
 use crate::game::prefabs::tower::Tower;
 use crate::game::prefabs::wizard::Wizard;
 use crate::game::screens::Screen;
-use avian3d::prelude::Collider;
+use avian3d::prelude::{Collider, RigidBody};
 use bevy::color::palettes::css::GREEN;
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
@@ -37,6 +37,8 @@ pub fn spawn_level(
                 (
                     Name::new("Grass"),
                     Mesh3d(meshes.add(Cuboid::new(1000.0, 10.0, 1000.0))),
+                    Collider::cuboid(1000.0, 10.0, 1000.0),
+                    RigidBody::Static,
                     MeshMaterial3d(materials.add(StandardMaterial {
                         base_color: Color::from(GREEN),
                         perceptual_roughness: 1.0,
@@ -53,7 +55,7 @@ pub fn spawn_level(
         ))
         .id();
 
-    let tower_ent = commands
+    let _tower_ent = commands
         .entity(level_ent)
         .with_child((
             Tower,

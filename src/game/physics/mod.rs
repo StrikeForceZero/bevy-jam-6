@@ -2,7 +2,6 @@ use crate::game::pause_controller::Pause;
 use avian3d::prelude::{
     Physics, PhysicsInterpolationPlugin, PhysicsPickingPlugin, PhysicsPlugins, PhysicsTime,
 };
-#[cfg(feature = "dev")]
 use avian3d::prelude::{PhysicsDebugPlugin, PhysicsGizmos};
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
@@ -18,7 +17,6 @@ fn toggle_gizmos(
     mut debug_gizmos_enabled: ResMut<PhysicsDebugGizmosEnabled>,
     input: Res<ButtonInput<KeyCode>>,
 ) {
-    #[cfg(feature = "dev")]
     if input.just_pressed(KeyCode::KeyV) {
         debug_gizmos_enabled.0 = !debug_gizmos_enabled.0;
     }
@@ -32,15 +30,12 @@ fn toggle_gizmos(
 pub(crate) fn plugin(app: &mut App) {
     app.add_plugins(PhysicsPlugins::default().set(PhysicsInterpolationPlugin::extrapolate_all()));
     app.add_plugins(PhysicsPickingPlugin);
-    #[cfg(feature = "dev")]
-    {
-        app.add_plugins(PhysicsDebugPlugin::default());
-        app.world_mut()
-            .resource_mut::<GizmoConfigStore>()
-            .config_mut::<PhysicsGizmos>()
-            .0
-            .enabled = app.world().resource::<PhysicsDebugGizmosEnabled>().0;
-    }
+    app.add_plugins(PhysicsDebugPlugin::default());
+    app.world_mut()
+        .resource_mut::<GizmoConfigStore>()
+        .config_mut::<PhysicsGizmos>()
+        .0
+        .enabled = app.world().resource::<PhysicsDebugGizmosEnabled>().0;
     app.add_systems(OnEnter(Pause(false)), |mut time: ResMut<Time<Physics>>| {
         time.unpause();
     });
