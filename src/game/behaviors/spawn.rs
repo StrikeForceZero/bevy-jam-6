@@ -2,11 +2,10 @@ use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 
 use crate::game::{
+    behaviors::move_towards::MoveTowards,
     prefabs::{spawner::Spawner, tower::Tower},
     scenes::game::LevelRoot,
 };
-
-use super::target_ent::TargetEnt;
 
 fn spawn(
     mut commands: Commands,
@@ -25,13 +24,8 @@ fn spawn(
             commands.entity(level_ent).with_child((
                 Name::new("Skele"),
                 spawner.spawns,
-                // TODO scale should be set in the enemy spawner
                 trans.with_scale(Vec3::splat(15.)),
-                TargetEnt {
-                    target_ent: tower_ent,
-                    // TODO migrate to using colliders for determining proximity
-                    within_distance: 20.0,
-                },
+                MoveTowards(tower_ent),
             ));
 
             spawner.spawn_left -= 1;

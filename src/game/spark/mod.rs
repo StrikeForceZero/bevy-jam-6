@@ -17,12 +17,12 @@ use config::*;
 
 #[auto_name]
 #[auto_register_type]
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Default)]
 #[require(Transform,Snapshot<GlobalTransform>)]
 pub struct Spark;
 
 #[auto_register_type]
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Default)]
 #[require(Transform, Pickable)]
 pub struct SparkTarget;
 

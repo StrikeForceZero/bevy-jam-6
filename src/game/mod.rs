@@ -21,6 +21,7 @@ mod scenes;
 pub mod screens;
 mod snapshot;
 mod spark;
+mod status_bar;
 mod theme;
 
 use crate::game::rng::RngPlugin;
@@ -34,6 +35,7 @@ use bevy_egui::EguiPlugin;
 #[cfg(feature = "dev_frame_count_log")]
 use bevy_frame_count_log_prefix::prelude::FrameCountLogPrefixPlugin;
 use bevy_hanabi::HanabiPlugin;
+use health::Health;
 
 pub struct GamePlugin;
 
@@ -72,6 +74,7 @@ impl Plugin for GamePlugin {
         app.add_plugins(health::plugin);
         app.add_plugins(spark::plugin);
         app.add_plugins(despawn::plugin::<PreUpdate>);
+        app.add_plugins(status_bar::plugin::<Health>);
     }
 }
 
