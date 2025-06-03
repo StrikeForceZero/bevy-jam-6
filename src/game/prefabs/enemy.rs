@@ -1,6 +1,7 @@
 use crate::game::{
     asset_tracking::LoadResource,
     health::{Health, MaxHealth},
+    prefabs::health_bar::overhead_health_bar,
     spark::SparkTarget,
 };
 use bevy::prelude::*;
@@ -90,6 +91,7 @@ impl Enemy {
             MovementSpeed(enemy_meta.move_speed),
             Health(enemy_meta.max_health),
             MaxHealth(enemy_meta.max_health),
+            children![overhead_health_bar(trigger.target(), 20.0)],
         ));
     }
 }

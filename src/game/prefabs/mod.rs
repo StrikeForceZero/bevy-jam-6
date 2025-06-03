@@ -1,4 +1,5 @@
 pub mod enemy;
+pub mod health_bar;
 pub mod spawner;
 pub mod tower;
 pub mod wizard;
