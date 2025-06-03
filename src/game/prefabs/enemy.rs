@@ -4,6 +4,7 @@ use crate::game::{
     prefabs::health_bar::overhead_health_bar,
     spark::SparkTarget,
 };
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 
@@ -59,7 +60,7 @@ impl EnemyMeta {
 impl Enemy {
     pub fn meta(&self) -> EnemyMeta {
         match self {
-            Self::BaseSkele => EnemyMeta::new(100.0, 8.0),
+            Self::BaseSkele => EnemyMeta::new(100.0, 16.0),
         }
     }
 }
@@ -91,6 +92,13 @@ impl Enemy {
             MovementSpeed(enemy_meta.move_speed),
             Health(enemy_meta.max_health),
             MaxHealth(enemy_meta.max_health),
+            Collider::capsule(0.5, 3.0),
+            RigidBody::Dynamic,
+            LockedAxes::new()
+                .lock_rotation_x()
+                .lock_rotation_y()
+                .lock_rotation_z()
+                .lock_translation_y(),
             children![overhead_health_bar(trigger.target(), 20.0)],
         ));
     }

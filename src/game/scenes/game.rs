@@ -1,7 +1,6 @@
 use std::f32::consts::PI;
 use std::time::Duration;
 
-use crate::game::behaviors::target_ent::TargetEnt;
 use crate::game::camera::CameraTarget;
 use crate::game::effects::lightning_ball::{LightningBall, LightningBallConduit};
 use crate::game::prefabs::enemy::Enemy;
@@ -84,16 +83,6 @@ pub fn spawn_level(
             Transform::from_xyz(x, 10.0, y),
         ));
     }
-    // Prespawned skele
-    commands.entity(level_ent).with_child((
-        Name::new("Skele"),
-        Enemy::BaseSkele,
-        Transform::from_xyz(100.0, 10.0, 100.0).with_scale(Vec3::splat(15.0)),
-        TargetEnt {
-            target_ent: tower_ent,
-            within_distance: 20.0,
-        },
-    ));
 }
 
 /// Generate points along a circle.
