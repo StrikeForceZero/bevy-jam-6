@@ -1,6 +1,6 @@
 use super::MovementSpeed;
 use avian3d::prelude::LinearVelocity;
-use bevy::{color::palettes::css::RED, prelude::*};
+use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 
 #[auto_register_type]

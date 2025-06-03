@@ -92,8 +92,12 @@ impl Enemy {
             MovementSpeed(enemy_meta.move_speed),
             Health(enemy_meta.max_health),
             MaxHealth(enemy_meta.max_health),
-            Collider::capsule(0.5, 3.0),
             RigidBody::Dynamic,
+            Collider::compound(vec![(
+                Vec3::Y,
+                Quat::default(),
+                Collider::capsule(0.5, 1.6),
+            )]),
             LockedAxes::new()
                 .lock_rotation_x()
                 .lock_rotation_y()
