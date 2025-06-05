@@ -1,3 +1,4 @@
+use crate::game::utils::vector::to_bevy_3d;
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 
@@ -11,8 +12,7 @@ pub trait Vec2Ext {
 
 impl Vec2Ext for Vec2 {
     fn to_vec3(self) -> Vec3 {
-        let Vec2 { x, y: z } = self;
-        Vec3::new(x, 0.0, -z)
+        to_bevy_3d(self)
     }
 }
 
