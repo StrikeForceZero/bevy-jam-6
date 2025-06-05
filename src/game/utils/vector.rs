@@ -121,7 +121,7 @@ pub enum Vector {
 }
 
 impl Vector {
-    pub const fn to_2d(self) -> XY_2D {
+    pub const fn to_bevy_2d(self) -> XY_2D {
         XY_2D(match self {
             Self::XY_2D(XY_2D(vec2)) => vec2,
             Self::XZ_3D(XZ_3D(vec2)) => vec2,
@@ -130,7 +130,7 @@ impl Vector {
             Self::XYZ_3D(XYZ_3D(vec3)) => to_bevy_2d(vec3),
         })
     }
-    pub const fn to_3d(self) -> XYZ_3D {
+    pub const fn to_bevy_3d(self) -> XYZ_3D {
         XYZ_3D(match self {
             Self::XY_2D(XY_2D(vec2)) => to_bevy_3d(vec2),
             Self::XZ_3D(XZ_3D(Vec2 { x, y: z })) => Vec3::new(x, 0.0, z),
@@ -169,19 +169,19 @@ mod tests {
     }
 
     #[test]
-    fn to_2d() {
-        assert_eq!(XY_2D(vec2(X, Y)).to_vector().to_2d(), d2(X, Y));
-        assert_eq!(XZ_3D(vec2(X, Z)).to_vector().to_2d(), d2(X, Z));
-        assert_eq!(YZ_3D(vec2(Y, Z)).to_vector().to_2d(), d2(EMPTY, -Z));
-        assert_eq!(XY_3D(vec2(X, Y)).to_vector().to_2d(), d2(X, EMPTY));
-        assert_eq!(XYZ_3D(vec3(X, Y, Z)).to_vector().to_2d(), d2(X, -Z));
+    fn to_bevy_2d() {
+        assert_eq!(XY_2D(vec2(X, Y)).to_vector().to_bevy_2d(), d2(X, Y));
+        assert_eq!(XZ_3D(vec2(X, Z)).to_vector().to_bevy_2d(), d2(X, Z));
+        assert_eq!(YZ_3D(vec2(Y, Z)).to_vector().to_bevy_2d(), d2(EMPTY, -Z));
+        assert_eq!(XY_3D(vec2(X, Y)).to_vector().to_bevy_2d(), d2(X, EMPTY));
+        assert_eq!(XYZ_3D(vec3(X, Y, Z)).to_vector().to_bevy_2d(), d2(X, -Z));
     }
 
     #[test]
-    fn to_3d() {
-        assert_eq!(XY_2D(vec2(X, Y)).to_vector().to_3d(), d3(X, EMPTY, -Y));
-        assert_eq!(XZ_3D(vec2(X, Z)).to_vector().to_3d(), d3(X, EMPTY, Z));
-        assert_eq!(XY_3D(vec2(X, Y)).to_vector().to_3d(), d3(X, Y, EMPTY));
-        assert_eq!(XYZ_3D(vec3(X, Y, Z)).to_vector().to_3d(), d3(X, Y, Z));
+    fn to_bevy_3d() {
+        assert_eq!(XY_2D(vec2(X, Y)).to_vector().to_bevy_3d(), d3(X, EMPTY, -Y));
+        assert_eq!(XZ_3D(vec2(X, Z)).to_vector().to_bevy_3d(), d3(X, EMPTY, Z));
+        assert_eq!(XY_3D(vec2(X, Y)).to_vector().to_bevy_3d(), d3(X, Y, EMPTY));
+        assert_eq!(XYZ_3D(vec3(X, Y, Z)).to_vector().to_bevy_3d(), d3(X, Y, Z));
     }
 }
