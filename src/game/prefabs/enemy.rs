@@ -1,10 +1,11 @@
 use avian3d::prelude::CollisionEventsEnabled;
 use std::f32::consts::PI;
+use std::time::Duration;
 
-use crate::game::asset_tracking::LoadResource;
 use crate::game::behaviors::MovementSpeed;
 use crate::game::behaviors::target_ent::TargetEnt;
 use crate::game::prefabs::bowling_ball::BowlingBall;
+use crate::game::{asset_tracking::LoadResource, behaviors::despawn::Despawn};
 use avian3d::prelude::{
     CenterOfMass, Collider, CollisionStarted, Collisions, LockedAxes, RigidBody,
 };
@@ -120,7 +121,12 @@ fn collision_force_check(
             // TODO: only remove if enough force
             // TODO: if don't calc force for skele <-> skele
             //  we should make it so skele's maintain formation instead of converging and bumping into each other
-            commands.entity(skele).remove::<TargetEnt>();
+            commands
+                .entity(skele)
+                .remove::<TargetEnt>()
+                .insert(Despawn {
+                    ttl: Duration::from_secs_f32(1.0),
+                });
         }
     }
 }

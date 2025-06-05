@@ -9,7 +9,6 @@ use crate::game::prefabs::game_world_markers::{
     auto_collider_mesh_obs,
 };
 use crate::game::prefabs::player::{Player, PlayerSystemParam};
-use crate::game::scenes::simple_bowling::{Facing, generate_pin_layout};
 use crate::game::screens::Screen;
 use crate::game::utils::extensions::vec2::Vec2Ext;
 use avian3d::prelude::{ExternalAngularImpulse, ExternalImpulse, Friction, Mass};
@@ -19,6 +18,14 @@ use bevy::scene::SceneInstanceReady;
 use bevy_auto_plugin::auto_plugin::*;
 use smart_default::SmartDefault;
 use std::ops::{Deref, DerefMut};
+
+#[auto_register_type]
+#[auto_name]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Transform)]
+#[require(Visibility)]
+pub struct LevelRoot;
 
 pub fn spawn_level(mut commands: Commands) {
     info!("spawning world");
@@ -201,4 +208,35 @@ fn hide_roof(
 pub(crate) fn plugin(app: &mut App) {
     app.add_systems(Update, demo_input);
     app.add_systems(Update, hide_roof);
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Facing {
+    Away,
+    Toward,
+}
+pub fn generate_pin_layout(pin_width: f32, spacing: f32, rows: usize, facing: Facing) -> Vec<Vec2> {
+    let mut positions = Vec::new();
+    for r in 0..rows {
+        let num_in_row = (rows - r) as f32;
+        let y = (r as f32) * (pin_width + spacing);
+        // total width occupied by this row: N * pin_width + (N - 1) * spacing
+        let row_width = num_in_row * pin_width + (num_in_row - 1.0) * spacing;
+
+        // The first pin’s center x should be at:
+        //   -row_width/2 + pin_width/2
+        // so that the row is centered around x = 0.0
+        let start_x = -row_width / 2.0 + pin_width / 2.0;
+
+        for i in 0..(num_in_row as usize) {
+            let x = start_x + (i as f32) * (pin_width + spacing);
+            let y = match facing {
+                Facing::Away => -y,
+                Facing::Toward => y,
+            };
+            positions.push(Vec2::new(x, y));
+        }
+    }
+
+    positions
 }

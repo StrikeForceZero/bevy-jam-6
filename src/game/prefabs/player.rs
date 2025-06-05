@@ -1,4 +1,7 @@
+use std::time::Duration;
+
 use crate::game::asset_tracking::LoadResource;
+use crate::game::behaviors::despawn::Despawn;
 use crate::game::camera::CameraTarget;
 use crate::game::effects::lightning_ball::LightningBall;
 use crate::game::prefabs::bowling_ball::BowlingBall;
@@ -76,6 +79,9 @@ impl PlayerSystemParam<'_, '_> {
                 ExternalAngularImpulse::new(accuracy_rot * (Vec3::X * 10.0 * power)),
                 ExternalImpulse::new(accuracy_rot * (Vec3::Z * 1000.0 * power)),
                 Mass(20.0),
+                Despawn {
+                    ttl: Duration::from_secs_f32(10.0),
+                },
             ),
             Some(Transform::from_scale(Vec3::splat(20.0))),
         );

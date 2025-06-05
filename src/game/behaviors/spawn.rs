@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 
-use crate::game::{prefabs::spawner::Spawner, scenes::simple_bowling::LevelRoot};
+use crate::game::{prefabs::spawner::Spawner, scenes::game::LevelRoot};
 
 use super::target_ent::TargetEnt;
 
