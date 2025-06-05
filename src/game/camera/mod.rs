@@ -58,7 +58,7 @@ fn single_camera_target(
         if entity == trigger.target() || camera_target.is_added() {
             continue;
         }
-        commands.entity(entity).try_despawn();
+        commands.entity(entity).remove::<CameraTarget>();
     }
 }
 
