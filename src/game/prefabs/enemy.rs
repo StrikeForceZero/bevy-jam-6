@@ -47,9 +47,6 @@ impl Enemy {
             Self::BaseSkele => DEFAULT_MOVE_SPEED,
         }
     }
-}
-
-impl Enemy {
     pub fn default_max_move_speed(&self) -> f32 {
         match self {
             Self::BaseSkele => DEFAULT_MOVE_SPEED,
