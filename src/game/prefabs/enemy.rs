@@ -137,10 +137,7 @@ fn collision_force_check(
             // TODO: only remove if enough force
             // TODO: if don't calc force for skele <-> skele
             //  we should make it so skele's maintain formation instead of converging and bumping into each other
-            commands
-                .entity(skele)
-                .remove::<TargetEnt>()
-                .remove::<LockedAxes>();
+            commands.entity(skele).remove::<LockedAxes>();
         }
     }
 }

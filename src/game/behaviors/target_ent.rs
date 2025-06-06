@@ -89,7 +89,7 @@ fn target_ent_sys(
                     let movement_amount = XYZ_3D::from(clamped_dir).xz();
                     movement_action.write(MovementActionEvent::new(
                         self_ent,
-                        MovementAction::Move(movement_amount),
+                        MovementAction::Walk(movement_amount),
                     ));
                 } else {
                     // clamped so we don’t overshoot:

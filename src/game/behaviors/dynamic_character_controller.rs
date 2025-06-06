@@ -9,6 +9,7 @@ use avian3d::{
     math::*,
     prelude::{NarrowPhaseSet, *},
 };
+use bevy::transform::systems::propagate_parent_transforms;
 use smart_default::SmartDefault;
 
 /// An event sent for a movement input action.
@@ -29,7 +30,7 @@ impl MovementActionEvent {
 #[auto_register_type]
 #[derive(Debug, Copy, Clone, Reflect)]
 pub enum MovementAction {
-    Move(XZ_3D),
+    Walk(XZ_3D),
     Jump,
     Stop,
 }
@@ -47,12 +48,13 @@ pub enum MovementAction {
 #[require(JumpImpulse)]
 #[require(MaxSlopeAngle)]
 #[require(LockedAxes::ROTATION_LOCKED)]
+#[require(PreviousScale)]
 pub struct DynamicCharacterController;
 
-pub fn ground_caster(collider: &Collider) -> ShapeCaster {
+pub fn ground_caster(collider: &Collider, scale: Vec3) -> ShapeCaster {
     // Create shape caster as a slightly smaller version of collider
     let mut caster_shape = collider.clone();
-    caster_shape.set_scale(Vector::ONE * 0.99, 10);
+    caster_shape.set_scale(scale * 0.99, 10);
     ShapeCaster::new(
         caster_shape,
         Vector::ZERO,
@@ -107,6 +109,12 @@ impl From<Res<'_, Gravity>> for ControllerGravity {
 #[reflect(Component)]
 pub struct MaxSlopeAngle(pub Scalar);
 
+#[auto_register_type]
+#[derive(Component, Debug, Default, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[component(immutable)]
+struct PreviousScale(Option<Vec3>);
+
 /// Updates the [`Grounded`] status for character controllers.
 fn update_grounded(
     mut commands: Commands,
@@ -126,6 +134,12 @@ fn update_grounded(
         // that isn't too steep.
         let is_grounded = hits.iter().any(|hit| {
             if let Some(angle) = max_slope_angle {
+                trace!(
+                    "{entity} hit normal: {}, angle_between: {} <= {}",
+                    hit.normal2,
+                    (rotation * -hit.normal2).angle_between(Vector::Y).abs(),
+                    angle.0
+                );
                 (rotation * -hit.normal2).angle_between(Vector::Y).abs() <= angle.0
             } else {
                 true
@@ -133,7 +147,7 @@ fn update_grounded(
         });
 
         if is_grounded != was_grounded {
-            trace!("entity {entity} grounded: {was_grounded} -> {is_grounded}");
+            debug!("entity {entity} grounded: {was_grounded} -> {is_grounded}");
             if is_grounded {
                 commands.entity(entity).insert(Grounded);
             } else {
@@ -178,7 +192,10 @@ fn movement(
         };
         let original_linear_velocity = linear_velocity.0;
         match event.action {
-            MovementAction::Move(direction) => {
+            MovementAction::Walk(direction) => {
+                if !is_grounded {
+                    continue;
+                }
                 let x = direction.x() * movement_acceleration.0 * delta_time;
                 let z = direction.z() * movement_acceleration.0 * delta_time;
                 if x != 0.0 {
@@ -405,15 +422,46 @@ fn kinematic_controller_collisions(
 /// Updates ground caster when the collider is updated
 fn update_ground_caster(
     trigger: Trigger<OnInsert, (Collider, DynamicCharacterController)>,
-    self_q: Query<&Collider, With<DynamicCharacterController>>,
+    self_q: Query<(&Collider, &Transform), With<DynamicCharacterController>>,
     mut commands: Commands,
 ) {
     let entity = trigger.target();
-    let Ok(collider) = self_q.get(entity) else {
+    let Ok((collider, transform)) = self_q.get(entity) else {
         return;
     };
     debug!("creating ground caster for {entity}");
-    commands.entity(entity).insert(ground_caster(collider));
+    commands
+        .entity(entity)
+        .insert(ground_caster(collider, transform.scale));
+}
+
+fn update_scale(
+    mut commands: Commands,
+    updated_transforms: Query<
+        (Entity, Ref<Collider>, Ref<Transform>, Ref<PreviousScale>),
+        With<DynamicCharacterController>,
+    >,
+) {
+    for (entity, collider, transform, prev_scale) in updated_transforms.iter() {
+        let prev_scale_opt = prev_scale.0;
+        let scale_changed = Some(transform.scale) != prev_scale_opt;
+        if !scale_changed && !transform.is_changed() {
+            continue;
+        }
+        let prev_scale = prev_scale_opt.unwrap_or(transform.scale);
+        let scale_changed = scale_changed || transform.scale != prev_scale;
+        if !scale_changed {
+            continue;
+        }
+        debug!(
+            "updating scale and ground_caster for {entity} from {prev_scale_opt:?} to {:?}",
+            Some(prev_scale)
+        );
+        commands.entity(entity).insert((
+            PreviousScale(Some(prev_scale)),
+            ground_caster(&collider, transform.scale),
+        ));
+    }
 }
 
 #[auto_plugin(app=app)]
@@ -436,5 +484,6 @@ pub(crate) fn plugin(app: &mut App) {
         PhysicsSchedule,
         kinematic_controller_collisions.in_set(NarrowPhaseSet::Last),
     );
+    app.add_systems(PostUpdate, update_scale.after(propagate_parent_transforms));
     app.add_observer(update_ground_caster);
 }
