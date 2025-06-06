@@ -61,7 +61,7 @@ pub fn ground_caster(collider: &Collider, scale: Vec3) -> ShapeCaster {
         Quaternion::default(),
         Dir3::NEG_Y,
     )
-    .with_max_distance(0.2)
+    .with_max_distance(scale.y * 0.2)
 }
 
 /// A marker component indicating that an entity is on the ground.
@@ -147,7 +147,7 @@ fn update_grounded(
         });
 
         if is_grounded != was_grounded {
-            debug!("entity {entity} grounded: {was_grounded} -> {is_grounded}");
+            trace!("entity {entity} grounded: {was_grounded} -> {is_grounded}");
             if is_grounded {
                 commands.entity(entity).insert(Grounded);
             } else {

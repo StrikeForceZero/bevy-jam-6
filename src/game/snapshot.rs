@@ -3,7 +3,7 @@ use bevy_auto_plugin::auto_plugin::*;
 
 #[derive(Component, Debug, Reflect)]
 #[reflect(Component)]
-pub struct Snapshot<T>(Option<T>);
+pub struct Snapshot<T>(pub Option<T>);
 
 impl<T> Default for Snapshot<T> {
     fn default() -> Self {

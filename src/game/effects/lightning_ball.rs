@@ -3,9 +3,12 @@
 use crate::game::rng::global::GlobalRng;
 use crate::game::rng::sphere::RandomSpherePoint;
 use avian3d::prelude::{
-    Collider, CollidingEntities, Collisions, Position, RigidBody, Rotation, Sensor,
+    Collider, CollidingEntities, Collisions, PhysicsSchedule, PhysicsSet, PhysicsStepSet, Position,
+    RigidBody, Rotation, Sensor,
 };
+use avian3d::prelude::{CollisionEnded, CollisionEventsEnabled, CollisionStarted};
 use bevy::color::palettes::css::SKY_BLUE;
+use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
@@ -61,6 +64,10 @@ struct LightningBallSources(Vec<Entity>);
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Transform)]
+#[require(Sensor)]
+#[require(Collider)]
+#[require(CollisionEventsEnabled)]
+#[require(CollidingEntities)]
 #[relationship(relationship_target = LightningBallSources)]
 struct LightningBallSource(Entity);
 
@@ -70,6 +77,18 @@ struct LightningBallSource(Entity);
 #[require(Transform)]
 #[require(Collider)]
 pub struct LightningBallConduit;
+
+#[auto_register_type]
+#[derive(Component, Debug, Default, Clone, Reflect)]
+#[reflect(Component)]
+#[component(immutable)]
+pub struct LightningBallZappedBy(EntityHashSet);
+
+impl LightningBallZappedBy {
+    pub fn entities(&self) -> impl Iterator<Item = &Entity> {
+        self.0.iter()
+    }
+}
 
 #[auto_register_type]
 #[auto_init_resource]
@@ -122,9 +141,7 @@ fn on_lightning_ball_added(
         // Collider::sphere(DEFAULT_LIGHTNING_BALL_RADIUS),
         children![(
             LightningBallSource(entity),
-            Sensor,
             Collider::sphere(DEFAULT_LIGHTNING_BALL_RADIUS * 2.0),
-            CollidingEntities::default(),
         )],
     ));
 }
@@ -355,8 +372,78 @@ fn animate_in_range(
     }
 }
 
+fn report_zapping(
+    mut commands: Commands,
+    mut started: EventReader<CollisionStarted>,
+    mut ended: EventReader<CollisionEnded>,
+    sources: Query<Entity, With<LightningBallSource>>,
+    targets: Query<Entity, With<LightningBallConduit>>,
+    zapped_by: Query<(Entity, Ref<LightningBallZappedBy>), With<LightningBallConduit>>,
+) {
+    let mut zapped_by_updates: EntityHashMap<LightningBallZappedBy> = EntityHashMap::default();
+    let resolve_source_target = |a: Entity, b: Entity| {
+        let source_target_res = if sources.contains(a) && targets.contains(b) {
+            Some((a, b))
+        } else if sources.contains(b) && targets.contains(a) {
+            Some((b, a))
+        } else {
+            // not a collision we care about
+            None
+        };
+        let (source, target) = source_target_res?;
+        let (source, target) = (
+            sources
+                .get(source)
+                .expect("failed to resolve source - impossible"),
+            targets
+                .get(target)
+                .expect("failed to resolve target - impossible"),
+        );
+        Some((source, target))
+    };
+    for collision in started.read() {
+        let Some((source, target)) = resolve_source_target(collision.0, collision.1) else {
+            continue;
+        };
+        zapped_by_updates
+            .entry(target)
+            .or_insert_with(|| {
+                zapped_by
+                    .get(target)
+                    .map(|(_, z)| z.clone())
+                    .unwrap_or_default()
+            })
+            .0
+            .insert(source);
+    }
+    for collision in ended.read() {
+        let Some((source, target)) = resolve_source_target(collision.0, collision.1) else {
+            continue;
+        };
+        zapped_by_updates
+            .entry(target)
+            .or_insert_with(|| {
+                zapped_by
+                    .get(target)
+                    .map(|(_, z)| z.clone())
+                    .unwrap_or_default()
+            })
+            .0
+            .remove(&source);
+    }
+    for (entity, zapped_by) in zapped_by_updates.into_iter() {
+        let mut entity_commands = commands.entity(entity);
+        if zapped_by.0.is_empty() {
+            entity_commands.remove::<LightningBallZappedBy>();
+        } else {
+            entity_commands.insert(zapped_by);
+        }
+    }
+}
+
 #[auto_plugin(app=app)]
 pub(crate) fn plugin(app: &mut App) {
     app.add_observer(on_lightning_ball_added);
     app.add_systems(Update, (animate, animate_in_range));
+    app.add_systems(PhysicsSchedule, report_zapping.in_set(PhysicsStepSet::Last));
 }
