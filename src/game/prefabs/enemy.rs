@@ -5,18 +5,24 @@ use crate::game::behaviors::dynamic_character_controller::{
 };
 use crate::game::behaviors::target_ent::TargetEnt;
 use crate::game::behaviors::{MaxMovementSpeed, MovementSpeed};
+use crate::game::camera::CameraTarget;
 use crate::game::effects::lightning_ball::LightningBallZappedBy;
 use crate::game::prefabs::bowling_ball::BowlingBall;
 use crate::game::snapshot::Snapshot;
 use crate::game::utils::quat::get_pitch_and_roll;
-use avian3d::prelude::{CenterOfMass, Collider, CollisionStarted, Collisions, RigidBody};
+use avian3d::prelude::{
+    AngularVelocity, CenterOfMass, Collider, ColliderConstructor, CollisionStarted, Collisions,
+    LinearVelocity, RigidBody,
+};
 use avian3d::prelude::{CollisionEventsEnabled, Gravity, LockedAxes};
 use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::ecs::query::QueryData;
 use bevy::ecs::system::SystemParam;
 use bevy::ecs::world::DeferredWorld;
+use bevy::gltf::GltfMaterialName;
 use bevy::prelude::*;
+use bevy::render::mesh::skinning::SkinnedMesh;
 use bevy_auto_plugin::auto_plugin::*;
 use std::f32::consts::PI;
 use std::fmt::Debug;
@@ -46,6 +52,13 @@ impl FromWorld for EnemyAssets {
 pub enum Enemy {
     BaseSkele,
 }
+
+#[auto_register_type]
+#[auto_name]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Transform)]
+pub struct Bone(Entity);
 
 const DEFAULT_MOVE_SPEED: f32 = 30.0;
 const DEFAULT_STUN_TIME: f32 = 2.0;
@@ -190,6 +203,16 @@ struct EnemyBeingStunnedQueryData {
     locked_axes: Option<&'static LockedAxes>,
 }
 
+#[derive(QueryData)]
+struct BoneMeshQueryData {
+    entity: Entity,
+    mesh3d: &'static Mesh3d,
+    mesh_material3d: &'static MeshMaterial3d<StandardMaterial>,
+    transform: &'static Transform,
+    global_transform: &'static GlobalTransform,
+    skinned_mesh: Option<&'static SkinnedMesh>,
+}
+
 #[derive(SystemParam)]
 struct StunSystemParam<'w, 's> {
     commands: Commands<'w, 's>,
@@ -197,7 +220,13 @@ struct StunSystemParam<'w, 's> {
     stunned_q: Query<'w, 's, EnemyStunnedAtQueryData, With<Enemy>>,
     data_q: Query<'w, 's, EnemyBeingStunnedQueryData, With<Enemy>>,
     zapped_by: Query<'w, 's, (Entity, Ref<'static, LightningBallZappedBy>)>,
-    dead_q: Query<'w, 's, (Entity, &'static DeadAt), With<Enemy>>,
+    dead_q: Query<'w, 's, (Entity, &'static DeadAt)>,
+    children: Query<'w, 's, &'static Children>,
+    parent: Query<'w, 's, &'static ChildOf>,
+    // TODO: probably use the spawn helper?
+    parent_global_transform: Query<'w, 's, &'static GlobalTransform>,
+    bones: Query<'w, 's, BoneMeshQueryData>,
+    velocity: Query<'w, 's, (&'static LinearVelocity, &'static AngularVelocity)>,
 }
 
 impl StunSystemParam<'_, '_> {
@@ -260,18 +289,56 @@ impl StunSystemParam<'_, '_> {
         let mut dead_entities = EntityHashSet::default();
         for stunned in self.stunned_q.iter() {
             let rot = stunned.transform.rotation;
-            let (pitch, roll) = get_pitch_and_roll(rot);
+            let (pitch, _roll) = get_pitch_and_roll(rot);
             let pitch_angle = pitch.to_degrees().abs();
             if pitch_angle >= 60_f32 {
                 dead_entities.insert(stunned.entity);
             }
         }
         for entity in dead_entities.into_iter() {
-            debug!("knocked over entity: {}", entity);
-            self.commands
-                .entity(entity)
-                .remove::<Stunned>()
-                .insert(DeadAt(self.time.elapsed_secs()));
+            debug!("killed entity: {}", entity);
+            let parent = self.parent.get(entity).ok();
+            for child in self.children.iter_descendants(entity) {
+                let Ok(bone) = self.bones.get(child) else {
+                    continue;
+                };
+                let bone_id = self
+                    .commands
+                    .spawn((
+                        Bone(entity),
+                        bone.mesh3d.clone(),
+                        bone.mesh_material3d.clone(),
+                        DeadAt(self.time.elapsed_secs()),
+                        RigidBody::Dynamic,
+                        ColliderConstructor::ConvexHullFromMesh,
+                    ))
+                    .id();
+                if let Some(skinned_mesh) = bone.skinned_mesh {
+                    self.commands.entity(bone_id).insert(skinned_mesh.clone());
+                }
+                if let Ok((&lin_vel, &ang_vel)) = self.velocity.get(entity) {
+                    self.commands
+                        .entity(bone_id)
+                        .insert(lin_vel)
+                        .insert(ang_vel);
+                }
+                // TODO: probably use the spawn helper?
+                if let Some(&ChildOf(parent)) = parent {
+                    let parent_global_transform = self
+                        .parent_global_transform
+                        .get(parent)
+                        .expect("parent missing GlobalTransform");
+                    self.commands.entity(parent).add_child(bone_id);
+                    self.commands
+                        .entity(bone_id)
+                        .insert(bone.global_transform.reparented_to(parent_global_transform));
+                } else {
+                    self.commands
+                        .entity(bone_id)
+                        .insert(bone.global_transform.compute_transform());
+                }
+            }
+            self.commands.entity(entity).despawn();
         }
     }
     fn clear_dead(&mut self) {
