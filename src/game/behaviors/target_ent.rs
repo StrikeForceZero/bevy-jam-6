@@ -1,8 +1,10 @@
 use super::MovementSpeed;
+use crate::game::behaviors::dynamic_character_controller::{
+    DynamicCharacterController, MovementAction, MovementActionEvent,
+};
 use crate::game::pause_controller::PausableSystems;
-use crate::game::prefabs::bowling_ball::BowlingBall;
-use crate::game::prefabs::enemy::Enemy;
-use avian3d::prelude::CollidingEntities;
+use crate::game::utils::vector::XYZ_3D;
+use avian3d::prelude::{CollidingEntities, LinearVelocity};
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 
@@ -17,50 +19,98 @@ pub struct TargetEnt {
 
 fn target_ent_sys(
     mut commands: Commands,
-    time: Res<Time>,
-    target_q: Query<(Entity, &TargetEnt, Option<&MovementSpeed>)>,
-    mut transform_q: Query<&mut Transform>,
+    time: Res<Time<Fixed>>,
+    self_q: Query<(
+        Entity,
+        &TargetEnt,
+        Option<&MovementSpeed>,
+        Option<&LinearVelocity>,
+        Has<DynamicCharacterController>,
+    )>,
+    mut transform_q: Query<Mut<Transform>>,
+    mut movement_action: EventWriter<MovementActionEvent>,
 ) {
-    for (self_ent, &target, movement_speed) in target_q.iter() {
+    let delta_time: f32 = time.delta_secs();
+
+    for (self_ent, target, opt_speed, linear_velocity_opt, has_controller) in self_q.iter() {
         let target_ent = target.target_ent;
-        // If target ent no longer exists, remove component
-        let Ok(target_trans) = transform_q.get(target_ent).cloned() else {
-            commands.entity(self_ent).remove::<TargetEnt>();
-            return;
-        };
-        let transform = transform_q
-            .get(self_ent)
-            .expect("no transform found for TargetEnt");
-        // Remove y component as some objects are not at ground level (e.g.
-        // tower center is at this point in time in the middle of its mesh).
-        let target_trans = target_trans.with_translation(Vec3::new(
-            target_trans.translation.x,
-            transform.translation.y,
-            target_trans.translation.z,
-        ));
-
-        // Face target
-        let mut self_trans = transform_q.get_mut(self_ent).unwrap();
-        self_trans.look_at(target_trans.translation, Vec3::Y);
-
-        // If target is outside range (`within_distance`), move towards it,
-        // otherwise attack.
-        let dist = self_trans.translation.distance(target_trans.translation);
-        if dist > target.within_distance {
-            if let Some(move_speed) = movement_speed {
-                let move_speed = move_speed.0 * time.delta_secs();
-                let move_dist = move_speed.min(dist - target.within_distance);
-                self_trans.translation = self_trans
-                    .translation
-                    .move_towards(target_trans.translation, move_dist);
+        let target_tx: Transform = match transform_q.get(target_ent) {
+            Ok(tx) => *tx,
+            Err(err) => {
+                error!(
+                    "TargetEnt {self_ent} target {target_ent} does not have Transform - {err:?}"
+                );
+                commands.entity(self_ent).remove::<TargetEnt>();
+                continue;
             }
-        } else {
-            // TODO trigger attack
+        };
+
+        let mut self_tx = match transform_q.get_mut(self_ent) {
+            Ok(tx) => tx,
+            Err(err) => {
+                error!("TargetEnt {self_ent} without Transform - {err:?}");
+                commands.entity(self_ent).remove::<TargetEnt>();
+                continue;
+            }
+        };
+
+        // limit to horizontal only movements
+        let target_pos: Vec3 = Vec3::new(
+            target_tx.translation.x,
+            self_tx.translation.y,
+            target_tx.translation.z,
+        );
+
+        // Face the target
+        {
+            let current_tx = *self_tx;
+            let mut looking_at_transform = current_tx;
+            looking_at_transform.look_at(target_pos, Vec3::Y);
+            if looking_at_transform != current_tx {
+                *self_tx = looking_at_transform;
+            }
+        }
+
+        let to_target: Vec3 = target_pos - self_tx.translation;
+        let dist: f32 = to_target.length();
+
+        let is_moving = dist > target.within_distance;
+        let is_in_attack_range = !is_moving;
+
+        if is_moving {
+            if let Some(&MovementSpeed(full_speed)) = opt_speed {
+                let max_dist_cover: f32 = full_speed * delta_time; // meters this tick
+                let dist_to_cover: f32 = dist - target.within_distance;
+                let dir: Vec3 = to_target / dist;
+
+                if has_controller {
+                    let clamped_speed: f32 = (dist_to_cover / delta_time).min(full_speed);
+                    let clamped_dir = dir * clamped_speed;
+                    let movement_amount = XYZ_3D::from(clamped_dir).xz();
+                    movement_action.write(MovementActionEvent::new(
+                        self_ent,
+                        MovementAction::Move(movement_amount),
+                    ));
+                } else {
+                    // clamped so we don’t overshoot:
+                    let actual_move: f32 = dist_to_cover.min(max_dist_cover);
+                    self_tx.translation += dir * actual_move;
+                }
+                continue;
+            };
+        }
+        let lin_vel = linear_velocity_opt.copied().unwrap_or_default();
+        if lin_vel.0.xz() != Vec2::ZERO {
+            movement_action.write(MovementActionEvent::new(self_ent, MovementAction::Stop));
+        }
+        if !is_in_attack_range {
+            // TODO: attack
+            info!("TargetEnt {self_ent} attacking {target_ent}");
         }
     }
 }
 
 #[auto_plugin(app=app)]
 pub(crate) fn plugin(app: &mut App) {
-    app.add_systems(Update, target_ent_sys.in_set(PausableSystems));
+    app.add_systems(FixedUpdate, target_ent_sys.in_set(PausableSystems));
 }

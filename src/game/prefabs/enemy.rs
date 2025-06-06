@@ -1,16 +1,17 @@
-use avian3d::prelude::CollisionEventsEnabled;
+use avian3d::prelude::{CollisionEventsEnabled, Gravity, LockedAxes};
 use std::f32::consts::PI;
 
 use crate::game::asset_tracking::LoadResource;
-use crate::game::behaviors::MovementSpeed;
-use crate::game::behaviors::target_ent::TargetEnt;
-use crate::game::prefabs::bowling_ball::BowlingBall;
-use avian3d::prelude::{
-    CenterOfMass, Collider, CollisionStarted, Collisions, LockedAxes, RigidBody,
+use crate::game::behaviors::dynamic_character_controller::{
+    ControllerGravity, DynamicCharacterController, MaxSlopeAngle, MovementAcceleration,
+    MovementDampingFactor,
 };
+use crate::game::behaviors::target_ent::TargetEnt;
+use crate::game::behaviors::{MaxMovementSpeed, MovementSpeed};
+use crate::game::prefabs::bowling_ball::BowlingBall;
+use avian3d::prelude::{CenterOfMass, Collider, CollisionStarted, Collisions, RigidBody};
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
-use itertools::Itertools;
 
 #[auto_register_type]
 #[derive(Resource, Asset, Debug, Clone, Reflect)]
@@ -38,10 +39,20 @@ pub enum Enemy {
     BaseSkele,
 }
 
+const DEFAULT_MOVE_SPEED: f32 = 30.0;
+
 impl Enemy {
     pub fn default_move_speed(&self) -> f32 {
         match self {
-            Self::BaseSkele => 20.0,
+            Self::BaseSkele => DEFAULT_MOVE_SPEED,
+        }
+    }
+}
+
+impl Enemy {
+    pub fn default_max_move_speed(&self) -> f32 {
+        match self {
+            Self::BaseSkele => DEFAULT_MOVE_SPEED,
         }
     }
 }
@@ -59,6 +70,7 @@ fn on_enemy_added(
     enemy_assets: Res<EnemyAssets>,
     gltfs: Res<Assets<Gltf>>,
     mut commands: Commands,
+    gravity: Res<Gravity>,
 ) {
     let enemy = query
         .get(trigger.target())
@@ -74,6 +86,7 @@ fn on_enemy_added(
 
     // MovementSpeed
     let movement_speed = MovementSpeed(enemy.default_move_speed());
+    let max_movement_speed = MaxMovementSpeed(enemy.default_max_move_speed());
 
     commands.entity(trigger.target()).insert((
         children![(
@@ -89,6 +102,10 @@ fn on_enemy_added(
         CenterOfMass::new(0.0, -5.5, 0.0),
         RigidBody::Dynamic,
         movement_speed,
+        max_movement_speed,
+        DynamicCharacterController,
+        ControllerGravity::from(gravity),
+        MaxSlopeAngle(60_f32.to_radians()),
     ));
 }
 
@@ -120,7 +137,10 @@ fn collision_force_check(
             // TODO: only remove if enough force
             // TODO: if don't calc force for skele <-> skele
             //  we should make it so skele's maintain formation instead of converging and bumping into each other
-            commands.entity(skele).remove::<TargetEnt>();
+            commands
+                .entity(skele)
+                .remove::<TargetEnt>()
+                .remove::<LockedAxes>();
         }
     }
 }

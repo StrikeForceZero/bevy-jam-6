@@ -60,9 +60,8 @@ fn spawn_extras_on_instance_ready(
                 Mass(1.0),
                 Friction::new(0.4),
                 TargetEnt {
-                    // TODO: spawn point doesnt work?
-                    target_ent: player, // game_world_marker.player_spawn.entity,
-                    within_distance: 10.0,
+                    target_ent: game_world_marker.player_spawn.target_entity(),
+                    within_distance: 25.0,
                 },
             ),
             Some(Transform::from_scale(Vec3::splat(4.0)).with_translation(pos.to_vec3())),

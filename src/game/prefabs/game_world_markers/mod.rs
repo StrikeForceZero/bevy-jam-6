@@ -267,6 +267,9 @@ where
         self.commands.entity(self.parent_q.entity).add_child(child);
         child
     }
+    pub fn target_entity(&self) -> Entity {
+        self.target_q.entity
+    }
 }
 
 #[derive(SystemParam)]
