@@ -73,7 +73,6 @@ impl PlayerSystemParam<'_, '_> {
             (
                 BowlingBall,
                 LightningBall,
-                CameraTarget,
                 ExternalAngularImpulse::new(accuracy_rot * (Vec3::X * 10.0 * power)),
                 ExternalImpulse::new(accuracy_rot * (Vec3::Z * 1000.0 * power)),
                 Mass(20.0),
