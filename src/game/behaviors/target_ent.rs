@@ -99,13 +99,15 @@ fn target_ent_sys(
                 continue;
             };
         }
-        let lin_vel = linear_velocity_opt.copied().unwrap_or_default();
-        if lin_vel.0.xz() != Vec2::ZERO {
-            movement_action.write(MovementActionEvent::new(self_ent, MovementAction::Stop));
+        if has_controller {
+            let lin_vel = linear_velocity_opt.copied().unwrap_or_default();
+            if lin_vel.0.xz() != Vec2::ZERO {
+                movement_action.write(MovementActionEvent::new(self_ent, MovementAction::Stop));
+            }
         }
-        if !is_in_attack_range {
+        if is_in_attack_range {
             // TODO: attack
-            info!("TargetEnt {self_ent} attacking {target_ent}");
+            info_once!("TargetEnt {self_ent} attacking {target_ent}");
         }
     }
 }

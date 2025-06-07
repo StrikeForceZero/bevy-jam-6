@@ -3,13 +3,14 @@
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
 
+use crate::game::behaviors::grounded::Grounded;
 use crate::game::behaviors::{MaxMovementSpeed, clamp_velocity_to_max_xz};
 use crate::game::utils::vector::XZ_3D;
 use avian3d::{
     math::*,
     prelude::{NarrowPhaseSet, *},
 };
-use bevy::transform::systems::propagate_parent_transforms;
+use bevy::ecs::query::QueryData;
 use smart_default::SmartDefault;
 
 /// An event sent for a movement input action.
@@ -48,28 +49,7 @@ pub enum MovementAction {
 #[require(JumpImpulse)]
 #[require(MaxSlopeAngle)]
 #[require(LockedAxes::ROTATION_LOCKED)]
-#[require(PreviousScale)]
 pub struct DynamicCharacterController;
-
-pub fn ground_caster(collider: &Collider, scale: Vec3) -> ShapeCaster {
-    // Create shape caster as a slightly smaller version of collider
-    let mut caster_shape = collider.clone();
-    caster_shape.set_scale(scale * 0.99, 10);
-    ShapeCaster::new(
-        caster_shape,
-        Vector::ZERO,
-        Quaternion::default(),
-        Dir3::NEG_Y,
-    )
-    .with_max_distance(scale.y * 0.2)
-}
-
-/// A marker component indicating that an entity is on the ground.
-#[auto_register_type]
-#[derive(Component, Debug, Default, Copy, Clone, Reflect)]
-#[reflect(Component)]
-#[component(storage = "SparseSet")]
-pub struct Grounded;
 
 /// The acceleration used for character movement.
 #[auto_register_type]
@@ -108,54 +88,6 @@ impl From<Res<'_, Gravity>> for ControllerGravity {
 #[derive(Component, Debug, Default, Copy, Clone, Reflect)]
 #[reflect(Component)]
 pub struct MaxSlopeAngle(pub Scalar);
-
-#[auto_register_type]
-#[derive(Component, Debug, Default, Copy, Clone, Reflect)]
-#[reflect(Component)]
-#[component(immutable)]
-struct PreviousScale(Option<Vec3>);
-
-/// Updates the [`Grounded`] status for character controllers.
-fn update_grounded(
-    mut commands: Commands,
-    mut query: Query<
-        (
-            Entity,
-            &ShapeHits,
-            &Rotation,
-            Option<&MaxSlopeAngle>,
-            Has<Grounded>,
-        ),
-        With<DynamicCharacterController>,
-    >,
-) {
-    for (entity, hits, rotation, max_slope_angle, was_grounded) in &mut query {
-        // The character is grounded if the shape caster has a hit with a normal
-        // that isn't too steep.
-        let is_grounded = hits.iter().any(|hit| {
-            if let Some(angle) = max_slope_angle {
-                trace!(
-                    "{entity} hit normal: {}, angle_between: {} <= {}",
-                    hit.normal2,
-                    (rotation * -hit.normal2).angle_between(Vector::Y).abs(),
-                    angle.0
-                );
-                (rotation * -hit.normal2).angle_between(Vector::Y).abs() <= angle.0
-            } else {
-                true
-            }
-        });
-
-        if is_grounded != was_grounded {
-            trace!("entity {entity} grounded: {was_grounded} -> {is_grounded}");
-            if is_grounded {
-                commands.entity(entity).insert(Grounded);
-            } else {
-                commands.entity(entity).remove::<Grounded>();
-            }
-        }
-    }
-}
 
 /// Responds to [`MovementAction`] events and moves character controllers accordingly.
 fn movement(
@@ -419,62 +351,23 @@ fn kinematic_controller_collisions(
     }
 }
 
-/// Updates ground caster when the collider is updated
-fn update_ground_caster(
-    trigger: Trigger<OnInsert, (Collider, DynamicCharacterController)>,
-    self_q: Query<(&Collider, &Transform), With<DynamicCharacterController>>,
-    mut commands: Commands,
-) {
-    let entity = trigger.target();
-    let Ok((collider, transform)) = self_q.get(entity) else {
-        return;
-    };
-    debug!("creating ground caster for {entity}");
-    commands
-        .entity(entity)
-        .insert(ground_caster(collider, transform.scale));
-}
-
-fn update_scale(
-    mut commands: Commands,
-    updated_transforms: Query<
-        (Entity, Ref<Collider>, Ref<Transform>, Ref<PreviousScale>),
-        With<DynamicCharacterController>,
-    >,
-) {
-    for (entity, collider, transform, prev_scale) in updated_transforms.iter() {
-        let prev_scale_opt = prev_scale.0;
-        let scale_changed = Some(transform.scale) != prev_scale_opt;
-        if !scale_changed && !transform.is_changed() {
-            continue;
-        }
-        let prev_scale = prev_scale_opt.unwrap_or(transform.scale);
-        let scale_changed = scale_changed || transform.scale != prev_scale;
-        if !scale_changed {
-            continue;
-        }
-        debug!(
-            "updating scale and ground_caster for {entity} from {prev_scale_opt:?} to {:?}",
-            Some(prev_scale)
-        );
-        commands.entity(entity).insert((
-            PreviousScale(Some(prev_scale)),
-            ground_caster(&collider, transform.scale),
-        ));
-    }
+#[derive(QueryData)]
+pub struct DynamicCharacterControllerQueryData {
+    pub entity: Entity,
+    pub character_controller: &'static DynamicCharacterController,
+    pub movement_acceleration: &'static MovementAcceleration,
+    pub movement_damping_factor: &'static MovementDampingFactor,
+    pub jump_impulse: &'static JumpImpulse,
+    pub controller_gravity: &'static ControllerGravity,
+    pub locked_axes: Option<&'static LockedAxes>,
+    pub max_slope_angle: Option<&'static MaxSlopeAngle>,
 }
 
 #[auto_plugin(app=app)]
 pub(crate) fn plugin(app: &mut App) {
     app.add_systems(
         FixedUpdate,
-        (
-            update_grounded,
-            apply_gravity,
-            movement,
-            apply_movement_damping,
-        )
-            .chain(),
+        (apply_gravity, movement, apply_movement_damping).chain(),
     );
     app.add_systems(
         // Run collision handling after collision detection.
@@ -484,6 +377,4 @@ pub(crate) fn plugin(app: &mut App) {
         PhysicsSchedule,
         kinematic_controller_collisions.in_set(NarrowPhaseSet::Last),
     );
-    app.add_systems(PostUpdate, update_scale.after(propagate_parent_transforms));
-    app.add_observer(update_ground_caster);
 }

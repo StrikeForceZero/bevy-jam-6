@@ -1,6 +1,14 @@
+pub mod dead;
+pub mod despawn_at;
 pub mod dynamic_character_controller;
+pub mod enemy_controller;
+pub mod grounded;
+pub mod knocked_over;
+pub mod restore_data;
 pub mod spawn;
+pub mod stun;
 pub mod target_ent;
+pub mod zap_stuns;
 
 use crate::game::utils::extensions::vec2::Vec2Ext;
 use crate::game::utils::extensions::vec3::Vec3Ext;
@@ -34,5 +42,12 @@ pub fn clamp_velocity_to_max_xz(orig_vel: LinearVelocity, max_speed: f32) -> Lin
 pub(crate) fn plugin(app: &mut App) {
     app.add_plugins(spawn::plugin);
     app.add_plugins(target_ent::plugin);
+    app.add_plugins(grounded::plugin);
     app.add_plugins(dynamic_character_controller::plugin);
+    app.add_plugins(despawn_at::plugin);
+    app.add_plugins(stun::plugin);
+    app.add_plugins(zap_stuns::plugin);
+    app.add_plugins(knocked_over::plugin);
+    app.add_plugins(dead::plugin);
+    app.add_plugins(enemy_controller::plugin);
 }

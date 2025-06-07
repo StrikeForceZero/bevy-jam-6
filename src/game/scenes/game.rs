@@ -53,7 +53,7 @@ fn spawn_extras_on_instance_ready(
     info!("spawning player");
     let player = game_world_marker.spawn_in_player_spawn(Player, None);
     info!("spawning enemies");
-    for pos in generate_pin_layout(5.0, 0.5, 3, Facing::Toward) {
+    for pos in generate_pin_layout(5.0, 0.5, 1, Facing::Toward) {
         game_world_marker.spawn_in_enemy_spawn(
             (
                 Enemy::BaseSkele,
