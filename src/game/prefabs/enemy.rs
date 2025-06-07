@@ -1,4 +1,4 @@
-use crate::game::asset_tracking::LoadResource;
+use crate::game::asset_tracking::{LoadResource, ResourceHandles};
 use crate::game::behaviors::dynamic_character_controller::{
     ControllerGravity, DynamicCharacterController, Grounded, MaxSlopeAngle, MovementAcceleration,
     MovementDampingFactor,
@@ -8,11 +8,13 @@ use crate::game::behaviors::{MaxMovementSpeed, MovementSpeed};
 use crate::game::camera::CameraTarget;
 use crate::game::effects::lightning_ball::LightningBallZappedBy;
 use crate::game::prefabs::bowling_ball::BowlingBall;
+use crate::game::screens::loading::all_assets_loaded;
 use crate::game::snapshot::Snapshot;
 use crate::game::utils::quat::get_pitch_and_roll;
 use avian3d::prelude::{
-    AngularVelocity, CenterOfMass, Collider, ColliderConstructor, CollisionStarted, Collisions,
-    LinearVelocity, RigidBody,
+    AngularDamping, AngularVelocity, CenterOfMass, Collider, ColliderConstructor, CollisionStarted,
+    Collisions, ExternalAngularImpulse, ExternalImpulse, LinearDamping, LinearVelocity, Mass,
+    Restitution, RigidBody,
 };
 use avian3d::prelude::{CollisionEventsEnabled, Gravity, LockedAxes};
 use bevy::ecs::component::HookContext;
@@ -20,7 +22,8 @@ use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::ecs::query::QueryData;
 use bevy::ecs::system::SystemParam;
 use bevy::ecs::world::DeferredWorld;
-use bevy::gltf::GltfMaterialName;
+use bevy::gltf::{GltfMaterialName, GltfMesh};
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::render::mesh::skinning::SkinnedMesh;
 use bevy_auto_plugin::auto_plugin::*;
@@ -123,12 +126,79 @@ pub struct StunnedData<T>(T)
 where
     T: Component + Debug + Copy + Clone + Reflect;
 
+#[auto_register_type]
+#[auto_init_resource]
+#[derive(Resource, Debug, Default, Clone, Reflect)]
+#[reflect(Resource)]
+pub struct UnskinnedMeshMap(HashMap<Handle<Mesh>, Handle<Mesh>>);
+
+// TODO: move
+fn strip_skinned_attributes(mesh: &mut Mesh) {
+    mesh.remove_attribute(Mesh::ATTRIBUTE_JOINT_INDEX);
+    mesh.remove_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT);
+}
+pub fn extract_unskinned_gltf_mesh_map(
+    gltf: &Gltf,
+    gltf_meshes: &Assets<GltfMesh>,
+    meshes: &mut Assets<Mesh>,
+) -> HashMap<Handle<Mesh>, Handle<Mesh>> {
+    let mut result: HashMap<Handle<Mesh>, Handle<Mesh>> = HashMap::new();
+    for mesh_handle in &gltf.meshes {
+        let Some(gltf_mesh) = gltf_meshes.get(mesh_handle) else {
+            // TODO: return Err("GltfMesh not loaded in asset server")
+            continue;
+        };
+        for primitive in &gltf_mesh.primitives {
+            let Some(mesh) = meshes.get(&primitive.mesh) else {
+                // TODO: return Err("Mesh not loaded in asset server")
+                continue;
+            };
+            let mut unskinned_mesh = mesh.clone();
+            strip_skinned_attributes(&mut unskinned_mesh);
+            assert!(
+                result
+                    .insert(primitive.mesh.clone(), meshes.add(unskinned_mesh),)
+                    .is_none()
+            );
+        }
+    }
+
+    result
+}
+
+fn run_after_all_resources_loaded(
+    mut done: Local<bool>,
+    enemy_assets: Res<EnemyAssets>,
+    gltfs: Res<Assets<Gltf>>,
+    gltf_meshes: Res<Assets<GltfMesh>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut unskinned_mesh_map: ResMut<UnskinnedMeshMap>,
+) {
+    // only run once
+    if *done {
+        return;
+    }
+    *done = true;
+
+    let gltf = gltfs
+        .get(enemy_assets.base_skele.id())
+        .expect("expected EnemyAssets to be loaded");
+    for (key, value) in extract_unskinned_gltf_mesh_map(gltf, &gltf_meshes, &mut meshes) {
+        let result = unskinned_mesh_map.0.insert(key, value);
+        assert!(result.is_none(), "Already unskinned mesh");
+    }
+}
+
 #[auto_plugin(app=app)]
 pub(crate) fn plugin(app: &mut App) {
+    app.add_systems(
+        Update,
+        run_after_all_resources_loaded.run_if(all_assets_loaded),
+    );
     app.load_resource::<EnemyAssets>();
     app.add_observer(on_enemy_added);
     app.add_systems(
-        Update,
+        PreUpdate,
         (
             clear_dead,
             refresh_zapped_by,
@@ -205,12 +275,14 @@ struct EnemyBeingStunnedQueryData {
 
 #[derive(QueryData)]
 struct BoneMeshQueryData {
+    name: Option<&'static Name>,
     entity: Entity,
     mesh3d: &'static Mesh3d,
     mesh_material3d: &'static MeshMaterial3d<StandardMaterial>,
     transform: &'static Transform,
     global_transform: &'static GlobalTransform,
     skinned_mesh: Option<&'static SkinnedMesh>,
+    gltf_material_name: Option<&'static GltfMaterialName>,
 }
 
 #[derive(SystemParam)]
@@ -227,6 +299,8 @@ struct StunSystemParam<'w, 's> {
     parent_global_transform: Query<'w, 's, &'static GlobalTransform>,
     bones: Query<'w, 's, BoneMeshQueryData>,
     velocity: Query<'w, 's, (&'static LinearVelocity, &'static AngularVelocity)>,
+    scene_root: Query<'w, 's, &'static SceneRoot>,
+    unskinned_mesh_map: Res<'w, UnskinnedMeshMap>,
 }
 
 impl StunSystemParam<'_, '_> {
@@ -291,51 +365,57 @@ impl StunSystemParam<'_, '_> {
             let rot = stunned.transform.rotation;
             let (pitch, _roll) = get_pitch_and_roll(rot);
             let pitch_angle = pitch.to_degrees().abs();
-            if pitch_angle >= 60_f32 {
+            if pitch_angle >= 75_f32 {
                 dead_entities.insert(stunned.entity);
             }
         }
+
         for entity in dead_entities.into_iter() {
             debug!("killed entity: {}", entity);
             let parent = self.parent.get(entity).ok();
+
             for child in self.children.iter_descendants(entity) {
                 let Ok(bone) = self.bones.get(child) else {
                     continue;
                 };
+                self.commands.entity(bone.entity).despawn();
+                let unskinned_mesh_handle = self
+                    .unskinned_mesh_map
+                    .0
+                    .get(&bone.mesh3d.0)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "missing unskinned mesh for bone {child} name: {:?}",
+                            bone.name
+                        )
+                    })
+                    .clone();
                 let bone_id = self
                     .commands
                     .spawn((
                         Bone(entity),
-                        bone.mesh3d.clone(),
+                        Mesh3d(unskinned_mesh_handle),
                         bone.mesh_material3d.clone(),
                         DeadAt(self.time.elapsed_secs()),
                         RigidBody::Dynamic,
                         ColliderConstructor::ConvexHullFromMesh,
+                        Transform::from_matrix(bone.global_transform.compute_matrix()),
+                        Restitution::new(0.001),
+                        LinearDamping(0.25),
+                        AngularDamping(0.25),
                     ))
                     .id();
-                if let Some(skinned_mesh) = bone.skinned_mesh {
-                    self.commands.entity(bone_id).insert(skinned_mesh.clone());
-                }
+
                 if let Ok((&lin_vel, &ang_vel)) = self.velocity.get(entity) {
                     self.commands
                         .entity(bone_id)
-                        .insert(lin_vel)
-                        .insert(ang_vel);
+                        .insert(LinearVelocity(lin_vel.0 / 100.0))
+                        .insert(AngularVelocity(ang_vel.0 / 100.0));
                 }
+
                 // TODO: probably use the spawn helper?
                 if let Some(&ChildOf(parent)) = parent {
-                    let parent_global_transform = self
-                        .parent_global_transform
-                        .get(parent)
-                        .expect("parent missing GlobalTransform");
                     self.commands.entity(parent).add_child(bone_id);
-                    self.commands
-                        .entity(bone_id)
-                        .insert(bone.global_transform.reparented_to(parent_global_transform));
-                } else {
-                    self.commands
-                        .entity(bone_id)
-                        .insert(bone.global_transform.compute_transform());
                 }
             }
             self.commands.entity(entity).despawn();
