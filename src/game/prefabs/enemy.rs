@@ -7,11 +7,14 @@ use crate::game::behaviors::MovementSpeed;
 use crate::game::behaviors::target_ent::TargetEnt;
 use crate::game::prefabs::bowling_ball::BowlingBall;
 use crate::game::rng::global::GlobalRng;
+use crate::game::scenes::LevelData;
 use crate::game::screens::Screen;
 use crate::game::{asset_tracking::LoadResource, behaviors::despawn::Despawn};
 use avian3d::prelude::{CenterOfMass, Collider, CollisionStarted, Collisions, RigidBody};
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
+
+use super::game_world_markers::TempleBase;
 
 #[auto_register_type]
 #[derive(Resource, Asset, Debug, Clone, Reflect)]
@@ -114,12 +117,54 @@ fn collision_force_check(
     mut collision_started: EventReader<CollisionStarted>,
     mut rng: GlobalRng,
     enemy_assets: Res<EnemyAssets>,
+    mut level_data: ResMut<LevelData>,
     collisions: Collisions,
     enemies: Query<Entity, With<Enemy>>,
     bowling_balls: Query<Entity, With<BowlingBall>>,
+    temple_base_q: Single<Entity, With<TempleBase>>,
+    children_q: Query<&Children>,
 ) {
+    let temple_base = temple_base_q.into_inner();
+    let mut temple_ents = vec![temple_base];
+    for ent in children_q.iter_descendants(temple_base) {
+        temple_ents.push(ent);
+    }
     for &CollisionStarted(entity_a, entity_b) in collision_started.read() {
         let collided_entities = [entity_a, entity_b];
+
+        let temple_collision_opt = collided_entities
+            .iter()
+            .find(|e| temple_ents.contains(e))
+            .cloned();
+
+        // Enemy reached the temple
+        if temple_collision_opt.is_some() && collided_entities.iter().any(|&e| enemies.contains(e))
+        {
+            // Deal damage to temple
+            level_data.temple_health = level_data.temple_health.saturating_sub(1);
+
+            // Determine which one is the skele ent
+            let skele = match temple_collision_opt.unwrap() == entity_a {
+                false => entity_a,
+                true => entity_b,
+            };
+
+            // Remove movement and add despawn timer
+            commands
+                .entity(skele)
+                .remove::<TargetEnt>()
+                .insert(AudioPlayer::new(
+                    enemy_assets
+                        .bone_snap_sounds
+                        .choose(rng.rng())
+                        .unwrap()
+                        .clone(),
+                ))
+                .insert(Despawn {
+                    ttl: Duration::from_secs_f32(0.2),
+                });
+        }
+
         if !collided_entities
             .iter()
             .all(|&e| enemies.contains(e) || bowling_balls.contains(e))

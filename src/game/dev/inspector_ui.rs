@@ -13,6 +13,7 @@
 use crate::game::camera::MainCamera;
 use crate::game::dev::selection::{DebugSelect, DebugSelectEnabled, DebugSelected};
 use bevy::asset::{ReflectAsset, UntypedAssetId};
+use bevy::log::tracing_subscriber::field::debug;
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use bevy::reflect::TypeRegistry;
@@ -35,6 +36,8 @@ use egui_dock::{DockArea, DockState, NodeIndex, Style};
 use std::any::TypeId;
 use std::fmt::Debug;
 use std::hash::Hash;
+
+use super::DebugUiEnabled;
 
 #[auto_plugin(app=app)]
 pub(super) fn plugin(app: &mut App) {
@@ -272,6 +275,13 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         match window {
             EguiWindow::GameView => {
                 *self.viewport_rect = ui.clip_rect();
+                if self
+                    .world
+                    .get_resource::<DebugUiEnabled>()
+                    .is_none_or(|enabled| !enabled.0)
+                {
+                    return;
+                }
                 egui::Frame::new()
                     .outer_margin(egui::Margin::same(10))
                     .show(ui, |ui| {

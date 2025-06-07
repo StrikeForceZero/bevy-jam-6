@@ -9,6 +9,8 @@ use bevy::text::TextSpanAccess;
 use bevy_auto_plugin::auto_plugin::*;
 use smart_default::SmartDefault;
 
+use super::DebugUiEnabled;
+
 #[derive(Component)]
 #[auto_name]
 struct FpsText;
@@ -93,10 +95,14 @@ fn setup_fps_counter(
     fps_text_scale: Res<FpsTextScale>,
     fps_text_bg_color: Res<FpsTextBgColor>,
     anchor: Res<FpsTextAnchor>,
+    ui_enabled: Res<DebugUiEnabled>,
     fps_text_root: Option<Single<Entity, With<FpsTextRoot>>>,
 ) {
     if let Some(fps_text_root) = fps_text_root {
         commands.entity(*fps_text_root).despawn();
+    }
+    if !ui_enabled.0 {
+        return;
     }
     let default_text_scale =
         TextFont::from_font_size(TextFont::default().font_size * fps_text_scale.0);
@@ -174,6 +180,7 @@ fn fps_text_update_system(
         Query<&mut TextSpan, With<FpsMinText>>,
         Query<&mut TextSpan, With<FpsMaxText>>,
         Query<&mut TextSpan, With<FrameTimeText>>,
+        Query<&mut Visibility, With<FpsTextRoot>>,
     )>,
 ) {
     if let Some(fps) = diagnostics.get(&FrameTimeDiagnosticsPlugin::FPS) {
@@ -204,8 +211,9 @@ fn is_changed(
     anchor: Res<FpsTextAnchor>,
     scale: Res<FpsTextScale>,
     color: Res<FpsTextBgColor>,
+    ui_enabled: Res<DebugUiEnabled>,
 ) -> bool {
-    anchor.is_changed() || scale.is_changed() || color.is_changed()
+    anchor.is_changed() || scale.is_changed() || color.is_changed() || ui_enabled.is_changed()
 }
 
 #[auto_plugin(app=app)]

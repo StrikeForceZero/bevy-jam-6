@@ -1,8 +1,8 @@
 use crate::game::prefabs::game_world::GameWorld;
 use avian3d::parry::mass_properties::MassProperties;
 use avian3d::prelude::{
-    AngularInertia, CenterOfMass, Collider, ColliderConstructor, Mass, NoAutoAngularInertia,
-    NoAutoCenterOfMass, NoAutoMass, RigidBody, VhacdParameters,
+    AngularInertia, CenterOfMass, Collider, ColliderConstructor, ColliderConstructorHierarchy,
+    Mass, NoAutoAngularInertia, NoAutoCenterOfMass, NoAutoMass, RigidBody, VhacdParameters,
 };
 use bevy::ecs::query::QueryData;
 use bevy::ecs::system::SystemParam;
@@ -47,6 +47,13 @@ pub struct OutOfBoundsMarker;
 #[reflect(Component)]
 #[require(Transform)]
 pub struct TemplePillar;
+
+#[auto_register_type]
+#[auto_name]
+#[derive(Component, Debug, Default, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Transform)]
+pub struct TempleBase;
 
 #[auto_register_type]
 #[auto_name]
@@ -155,6 +162,54 @@ pub fn auto_collider_mesh_obs(
                 }
             }
         }
+    }
+}
+
+#[auto_register_type]
+#[derive(Component, Debug, SmartDefault, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Transform)]
+pub struct AutoColliderMesh2 {
+    method: Method,
+}
+
+pub fn auto_collider_mesh2(
+    mut commands: Commands,
+    auto_collider_mesh_q: Query<
+        (Entity, &AutoColliderMesh2, Option<&RigidBody>),
+        Added<AutoColliderMesh2>,
+    >,
+) {
+    for (entity, auto_collider_mesh_ref, rigid_body_opt) in auto_collider_mesh_q.iter() {
+        info!("AutoColliderMesh2 {entity}");
+        let mut entity_cmds = commands.entity(entity);
+        let rigid_body = rigid_body_opt.copied().unwrap_or(RigidBody::Static);
+        if matches!(rigid_body, RigidBody::Static) {
+            // required for large meshes to prevent: assertion failed: self.is_normalized()
+            //  avian3d::dynamics::rigid_body::mass_properties::update_mass_properties
+            entity_cmds.insert((
+                NoAutoMass,
+                NoAutoAngularInertia,
+                NoAutoCenterOfMass,
+                Mass::ZERO,
+                AngularInertia::ZERO,
+                CenterOfMass::ZERO,
+            ));
+        }
+        entity_cmds.insert(rigid_body);
+        entity_cmds.insert(ColliderConstructorHierarchy::new(
+            match auto_collider_mesh_ref.method {
+                Method::ConvexHull => ColliderConstructor::ConvexHullFromMesh,
+                Method::ConvexDecomposition => ColliderConstructor::ConvexDecompositionFromMesh,
+                Method::ConvexDecompositionNoApprox => {
+                    ColliderConstructor::ConvexDecompositionFromMeshWithConfig(VhacdParameters {
+                        convex_hull_approximation: false,
+                        ..Default::default()
+                    })
+                }
+                Method::TriMesh => ColliderConstructor::TrimeshFromMesh,
+            },
+        ));
     }
 }
 
@@ -303,4 +358,5 @@ fn on_add_collider_disabled(trigger: Trigger<OnAdd, ColliderDisabled>, mut comma
 #[auto_plugin(app=app)]
 pub(crate) fn plugin(app: &mut App) {
     app.add_observer(on_add_collider_disabled);
+    app.add_systems(Update, auto_collider_mesh2);
 }
