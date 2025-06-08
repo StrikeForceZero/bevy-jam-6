@@ -1,4 +1,5 @@
 pub mod ball_counter;
+pub mod camera;
 pub mod dead;
 pub mod despawn;
 pub mod dynamic_character_controller;
@@ -44,6 +45,7 @@ pub fn clamp_velocity_to_max_xz(orig_vel: LinearVelocity, max_speed: f32) -> Lin
 #[auto_plugin(app=app)]
 pub(crate) fn plugin(app: &mut App) {
     app.add_plugins(ball_counter::plugin);
+    app.add_plugins(camera::plugin);
     app.add_plugins(dynamic_character_controller::plugin);
     app.add_plugins(dead::plugin);
     app.add_plugins(despawn::plugin);

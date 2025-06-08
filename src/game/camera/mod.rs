@@ -45,7 +45,7 @@ fn spawn_camera(mut commands: Commands) {
             focus: Vec3::ZERO,
             ..Default::default()
         },
-        Transform::from_translation(Vec3::new(0.0, 10.0, 100.0)),
+        Transform::from_translation(Vec3::new(0.0, 20.0, -100.0)),
     ));
 }
 

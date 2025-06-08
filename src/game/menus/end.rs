@@ -3,7 +3,7 @@ use bevy_auto_plugin::auto_plugin::*;
 
 use crate::game::{menus::Menu, scenes::LevelData, screens::Screen, theme::widget};
 
-fn spawn_end_menu(mut commands: Commands, ld: Mut<LevelData>) {
+fn spawn_end_menu(mut commands: Commands, ld: Res<LevelData>) {
     commands.spawn((
         widget::ui_root("End"),
         GlobalZIndex(2),
@@ -16,7 +16,7 @@ fn spawn_end_menu(mut commands: Commands, ld: Mut<LevelData>) {
                 TextColor(Color::srgb(0.4, 0.769, 1.)),
             ),
             (
-                Text::new("Can you do better?"),
+                Text::new("Can he do better?"),
                 TextFont::from_font_size(30.),
                 TextColor(Color::srgb(0.7, 0.769, 0.9)),
             ),
