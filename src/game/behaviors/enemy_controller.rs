@@ -3,7 +3,11 @@ use crate::game::behaviors::despawn::Despawn;
 use crate::game::behaviors::knocked_over::{
     KnockedOver, KnockedOverQueryData, KnockedOverSystemParams,
 };
+use crate::game::behaviors::pin_joint::{DisablePinJoints, EnablePinJoints};
 use crate::game::behaviors::restore_data::RestorableQueryData;
+use crate::game::behaviors::spawn_group::{
+    SpawnGroup, SpawnGroupItem, SpawnGroupItemQueryData, SpawnGroupQueryData,
+};
 use crate::game::behaviors::stun::{OnStunned, OnUnStunned, StunSystemParam};
 use crate::game::behaviors::target_ent::TargetEnt;
 use crate::game::effects::break_down_gltf::BreakGltfSystemParam;
@@ -15,7 +19,7 @@ use crate::game::scenes::LevelData;
 use crate::game::screens::Screen;
 use avian3d::prelude::{
     AngularDamping, AngularVelocity, ColliderConstructor, CollisionStarted, Collisions,
-    LinearDamping, LinearVelocity, LockedAxes, Restitution, RigidBody,
+    LinearDamping, LinearVelocity, LockedAxes, Restitution, RigidBody, SphericalJoint,
 };
 use bevy::ecs::query::QueryData;
 use bevy::ecs::system::SystemParam;
@@ -40,6 +44,7 @@ pub struct Bone(Entity);
 struct EnemyQueryData {
     entity: Entity,
     enemy: &'static Enemy,
+    spawn_group_item: &'static SpawnGroupItem,
     target_ent: RestorableQueryData<TargetEnt>,
     locked_axes: RestorableQueryData<LockedAxes>,
 }
@@ -194,6 +199,7 @@ fn collision_force_check(
                 .entity(skele)
                 .remove::<TargetEnt>()
                 .trigger(PlayBoneSnap)
+                .trigger(DisablePinJoints)
                 .insert(Despawn {
                     ttl: Duration::from_secs_f32(0.2),
                 });
@@ -240,6 +246,7 @@ fn on_stunned(
         .get(entity)
         .expect("Trigger<OnStunned> failed to resolve item - impossible");
     item.store_and_remove(&mut commands.entity(entity));
+    commands.entity(entity).trigger(DisablePinJoints);
 }
 
 fn on_unstunned(
@@ -253,6 +260,7 @@ fn on_unstunned(
         .get(entity)
         .expect("Trigger<OnUnStunned> failed to resolve item - impossible");
     item.restore(&mut commands.entity(entity));
+    commands.entity(entity).trigger(EnablePinJoints);
 }
 
 fn on_add_enemy_controller(trigger: Trigger<OnAdd, EnemyController>, mut commands: Commands) {

@@ -48,6 +48,7 @@ pub enum MovementAction {
 #[require(MovementDampingFactor)]
 #[require(JumpImpulse)]
 #[require(MaxSlopeAngle)]
+#[require(ControllerMode)]
 #[require(LockedAxes::ROTATION_LOCKED)]
 pub struct DynamicCharacterController;
 
@@ -81,6 +82,15 @@ impl From<Res<'_, Gravity>> for ControllerGravity {
     }
 }
 
+#[auto_register_type]
+#[derive(Component, Debug, Default, Copy, Clone, Reflect)]
+#[reflect(Component)]
+pub enum ControllerMode {
+    #[default]
+    Velocity,
+    Force,
+}
+
 /// The maximum angle a slope can have for a character controller
 /// to be able to climb and jump. If the slope is steeper than this angle,
 /// the character will slide down.
@@ -98,6 +108,9 @@ fn movement(
         &MovementAcceleration,
         &JumpImpulse,
         &mut LinearVelocity,
+        &mut ExternalForce,
+        &mut ExternalImpulse,
+        &ControllerMode,
         Option<&MaxMovementSpeed>,
         Has<Grounded>,
     )>,
@@ -112,6 +125,9 @@ fn movement(
             movement_acceleration,
             jump_impulse,
             mut linear_velocity,
+            mut external_force,
+            mut external_impulse,
+            controller_mode,
             max_movement_speed_opt,
             is_grounded,
         )) = controllers.get_mut(event.entity)
@@ -131,10 +147,24 @@ fn movement(
                 let x = direction.x() * movement_acceleration.0 * delta_time;
                 let z = direction.z() * movement_acceleration.0 * delta_time;
                 if x != 0.0 {
-                    linear_velocity.x += x;
+                    match controller_mode {
+                        ControllerMode::Velocity => {
+                            linear_velocity.x += x;
+                        }
+                        ControllerMode::Force => {
+                            external_force.x += x;
+                        }
+                    }
                 }
                 if z != 0.0 {
-                    linear_velocity.z += z;
+                    match controller_mode {
+                        ControllerMode::Velocity => {
+                            linear_velocity.z += z;
+                        }
+                        ControllerMode::Force => {
+                            external_force.z += z;
+                        }
+                    }
                 }
                 if let Some(max_movement_speed) = max_movement_speed_opt {
                     let clamped_velocity =
@@ -150,7 +180,14 @@ fn movement(
             }
             MovementAction::Jump => {
                 if is_grounded && linear_velocity.y != jump_impulse.0 {
-                    linear_velocity.y = jump_impulse.0;
+                    match controller_mode {
+                        ControllerMode::Velocity => {
+                            linear_velocity.y = jump_impulse.0;
+                        }
+                        ControllerMode::Force => {
+                            external_impulse.y = jump_impulse.0;
+                        }
+                    }
                 }
             }
             MovementAction::Stop => {

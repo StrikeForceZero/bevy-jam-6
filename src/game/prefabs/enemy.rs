@@ -1,10 +1,12 @@
-use avian3d::prelude::{CollisionEventsEnabled, Gravity};
+use avian3d::prelude::{
+    CollisionEventsEnabled, ExternalForce, ExternalImpulse, ExternalTorque, Gravity,
+};
 use std::f32::consts::PI;
 
 use crate::game::asset_tracking::LoadResource;
 use crate::game::audio::sound_effect;
 use crate::game::behaviors::dynamic_character_controller::{
-    ControllerGravity, DynamicCharacterController, MaxSlopeAngle,
+    ControllerGravity, ControllerMode, DynamicCharacterController, MaxSlopeAngle,
 };
 use crate::game::behaviors::enemy_controller::EnemyController;
 use crate::game::behaviors::grounded::Groundable;
@@ -75,6 +77,7 @@ pub enum Enemy {
 #[derive(Event, Debug, Default, Copy, Clone, Reflect)]
 pub struct PlayBoneSnap;
 
+pub const SKELE_WIDTH: f32 = 5.0;
 const DEFAULT_MOVE_SPEED: f32 = 30.0;
 const DEFAULT_STUN_TIME: f32 = 2.0;
 const DEFAULT_DESPAWN_AFTER_DEAD_SECS: f32 = 5.0;
@@ -126,29 +129,40 @@ fn on_enemy_added(
     let movement_speed = MovementSpeed(enemy.default_move_speed());
     let max_movement_speed = MaxMovementSpeed(enemy.default_max_move_speed());
 
-    commands.entity(trigger.target()).insert((
-        children![(
-            SceneRoot(gltf.scenes[0].clone()),
-            // For some reason the skele meshes are 180 rotated so fixing it
-            // with a local transform.
-            Transform::from_rotation(Quat::from_rotation_y(PI)).with_translation(Vec3::Y * -1.75),
-        ),],
-        // Parry colliders are centered around origin. Meshes have lowest
-        // vertex at y=0.0. Spawning the collider allows us to adjust
-        // its position to match the mesh.
-        Collider::capsule(0.25, 3.0),
-        CenterOfMass::new(0.0, -5.5, 0.0),
-        RigidBody::Dynamic,
-        EnemyController,
-        movement_speed,
-        max_movement_speed,
-        DynamicCharacterController,
-        Groundable,
-        KnockedOverAngle(75_f32.to_radians()),
-        ZapStunTime(enemy.default_stun_time()),
-        ControllerGravity::from(gravity),
-        MaxSlopeAngle(60_f32.to_radians()),
-    ));
+    commands
+        .entity(trigger.target())
+        .insert((
+            children![(
+                SceneRoot(gltf.scenes[0].clone()),
+                // For some reason the skele meshes are 180 rotated so fixing it
+                // with a local transform.
+                Transform::from_rotation(Quat::from_rotation_y(PI))
+                    .with_translation(Vec3::Y * -1.75),
+            ),],
+            // Parry colliders are centered around origin. Meshes have lowest
+            // vertex at y=0.0. Spawning the collider allows us to adjust
+            // its position to match the mesh.
+            Collider::capsule(0.25, 3.0),
+            CenterOfMass::new(0.0, -5.5, 0.0),
+            RigidBody::Dynamic,
+            EnemyController,
+            movement_speed,
+            max_movement_speed,
+            DynamicCharacterController,
+            // needed for joints to work properly
+            // ControllerMode::Force,
+            ControllerMode::Velocity,
+            // ExternalForce::ZERO.with_persistence(false),
+            // ExternalImpulse::ZERO.with_persistence(false),
+            // ExternalTorque::ZERO.with_persistence(false),
+        ))
+        .insert((
+            Groundable,
+            KnockedOverAngle(75_f32.to_radians()),
+            ZapStunTime(enemy.default_stun_time()),
+            ControllerGravity::from(gravity),
+            MaxSlopeAngle(60_f32.to_radians()),
+        ));
 }
 
 fn play_bone_snap(
