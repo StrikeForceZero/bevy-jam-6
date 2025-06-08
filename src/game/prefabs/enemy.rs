@@ -134,10 +134,7 @@ fn on_enemy_added(
         .insert((
             children![(
                 SceneRoot(gltf.scenes[0].clone()),
-                // For some reason the skele meshes are 180 rotated so fixing it
-                // with a local transform.
-                Transform::from_rotation(Quat::from_rotation_y(PI))
-                    .with_translation(Vec3::Y * -1.75),
+                Transform::from_translation(Vec3::Y * -1.75),
             ),],
             // Parry colliders are centered around origin. Meshes have lowest
             // vertex at y=0.0. Spawning the collider allows us to adjust
