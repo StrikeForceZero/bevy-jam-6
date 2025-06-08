@@ -34,7 +34,7 @@ fn target_ent_sys(
 
     for (self_ent, target, opt_speed, linear_velocity_opt, has_controller) in self_q.iter() {
         let target_ent = target.target_ent;
-        let (target_tx, target_gtx) = match transform_q.get(target_ent) {
+        let (_, target_gtx) = match transform_q.get(target_ent) {
             Ok((tx, gtx)) => (*tx, *gtx),
             Err(err) => {
                 error!(
@@ -54,27 +54,27 @@ fn target_ent_sys(
             }
         };
 
-        let target_pos_local = {
+        let target_pos_global = {
+            let mut flat_target = target_gtx.translation();
             // limit to horizontal only movements
-            let target_pos_global: Vec3 = Vec3::new(
-                target_gtx.translation().x,
-                self_gtx.translation().y,
-                target_gtx.translation().z,
-            );
-            target_pos_global - self_gtx.translation()
+            flat_target.y = self_gtx.translation().y;
+            flat_target
         };
 
+        let target_pos_local = target_pos_global - self_gtx.translation();
+
         // Face the target
-        {
+        if target_pos_local.length_squared() > 0.0 {
+            let yaw = f32::atan2(target_pos_local.x, target_pos_local.z);
             let current_tx = *self_tx;
             let mut looking_at_transform = current_tx;
-            looking_at_transform.look_at(target_pos_local, Vec3::Y);
+            looking_at_transform.rotation = Quat::from_rotation_y(-yaw);
             if looking_at_transform != current_tx {
                 *self_tx = looking_at_transform;
             }
         }
 
-        let to_target: Vec3 = target_pos_local - self_tx.translation;
+        let to_target: Vec3 = target_pos_global - self_gtx.translation();
         let dist: f32 = to_target.length();
 
         let is_moving = dist > target.within_distance;
