@@ -10,10 +10,11 @@ use crate::game::behaviors::spawn_group::{
 };
 use crate::game::behaviors::stun::{OnStunned, OnUnStunned, StunSystemParam};
 use crate::game::behaviors::target_ent::TargetEnt;
-use crate::game::effects::break_down_gltf::BreakGltfSystemParam;
+use crate::game::effects::break_down_gltf::{BreakGltfParams, BreakGltfSystemParam};
 use crate::game::prefabs::bowling_ball::BowlingBall;
 use crate::game::prefabs::enemy::{Enemy, EnemyAssets, PlayBoneSnap};
-use crate::game::prefabs::game_world_markers::TempleBase;
+use crate::game::prefabs::game_world::GameWorld;
+use crate::game::prefabs::game_world_markers::{GameWorldMarkerSystemParam, TempleBase};
 use crate::game::rng::global::GlobalRng;
 use crate::game::scenes::LevelData;
 use crate::game::screens::Screen;
@@ -120,7 +121,11 @@ fn process_knocked_over(mut commands: Commands, mut level_data: ResMut<LevelData
     }
 }
 
-fn process_dead(mut commands: Commands, mut enemy_sp: EnemySystemParam) {
+fn process_dead(
+    mut commands: Commands,
+    mut enemy_sp: EnemySystemParam,
+    game_world: Single<Entity, With<GameWorld>>,
+) {
     for item in enemy_sp.dead_q.iter() {
         if !item.dead.dead.is_added() {
             continue;
@@ -133,7 +138,13 @@ fn process_dead(mut commands: Commands, mut enemy_sp: EnemySystemParam) {
             (LinearVelocity::default(), AngularVelocity::default())
         };
 
-        for bone in enemy_sp.break_gltf_sp.break_gltf(entity, true) {
+        for bone in enemy_sp.break_gltf_sp.break_gltf(
+            entity,
+            BreakGltfParams {
+                new_parent: Some(*game_world),
+                ..Default::default()
+            },
+        ) {
             let despawn_in = item
                 .dead
                 .despawn

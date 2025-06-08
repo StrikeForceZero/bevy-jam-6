@@ -5,6 +5,7 @@ use bevy::gltf::GltfMesh;
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use bevy_auto_plugin::auto_plugin::*;
+use smart_default::SmartDefault;
 
 #[auto_register_type]
 #[auto_init_resource]
@@ -91,6 +92,13 @@ struct MeshMaterialQueryData {
     global_transform: &'static GlobalTransform,
 }
 
+#[derive(Debug, SmartDefault, Clone, Copy)]
+pub struct BreakGltfParams {
+    #[default = true]
+    pub despawn_original: bool,
+    pub new_parent: Option<Entity>,
+}
+
 #[derive(SystemParam)]
 pub struct BreakGltfSystemParam<'w, 's> {
     commands: Commands<'w, 's>,
@@ -101,13 +109,13 @@ pub struct BreakGltfSystemParam<'w, 's> {
 }
 
 impl BreakGltfSystemParam<'_, '_> {
-    pub fn break_gltf(&mut self, entity: Entity, despawn_original: bool) -> Vec<Entity> {
+    pub fn break_gltf(&mut self, entity: Entity, params: BreakGltfParams) -> Vec<Entity> {
         let child_of_opt = self.child_of_q.get(entity).ok();
 
         let mut parts = Vec::new();
 
         for child in self.children_q.iter_descendants(entity) {
-            if despawn_original {
+            if params.despawn_original {
                 self.commands.entity(child).try_despawn();
             }
 
@@ -137,13 +145,14 @@ impl BreakGltfSystemParam<'_, '_> {
 
             parts.push(part);
 
-            // TODO: probably use the spawn helper?
-            if let Some(&ChildOf(parent)) = child_of_opt {
+            if let Some(new_parent) = params.new_parent {
+                self.commands.entity(new_parent).add_child(part);
+            } else if let Some(&ChildOf(parent)) = child_of_opt {
                 self.commands.entity(parent).add_child(part);
             }
         }
 
-        if despawn_original {
+        if params.despawn_original {
             self.commands.entity(entity).try_despawn();
         }
 
