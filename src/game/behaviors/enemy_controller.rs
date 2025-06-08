@@ -1,5 +1,6 @@
 use crate::game::behaviors::dead::{Dead, DeadFor, DeadQueryData};
 use crate::game::behaviors::despawn::Despawn;
+use crate::game::behaviors::dynamic_character_controller::DynamicCharacterController;
 use crate::game::behaviors::knocked_over::{
     KnockedOver, KnockedOverQueryData, KnockedOverSystemParams,
 };
@@ -8,7 +9,7 @@ use crate::game::behaviors::restore_data::RestorableQueryData;
 use crate::game::behaviors::spawn_group::{
     SpawnGroup, SpawnGroupItem, SpawnGroupItemQueryData, SpawnGroupQueryData,
 };
-use crate::game::behaviors::stun::{OnStunned, OnUnStunned, StunSystemParam};
+use crate::game::behaviors::stun::{OnStunned, OnUnStunned, StunSystemParam, StunTime, Stunned};
 use crate::game::behaviors::target_ent::TargetEnt;
 use crate::game::effects::break_down_gltf::{BreakGltfParams, BreakGltfSystemParam};
 use crate::game::prefabs::bowling_ball::BowlingBall;
@@ -114,6 +115,8 @@ fn process_knocked_over(mut commands: Commands, mut level_data: ResMut<LevelData
             .entity(item.enemy.entity)
             // prevents knocked over from updating
             .remove::<KnockedOver>()
+            // prevents unstunning
+            .remove::<Stunned>()
             .insert((
                 Dead,
                 Despawn::in_seconds(item.enemy.enemy.default_despawn_time()),
